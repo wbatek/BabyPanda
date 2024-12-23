@@ -17,32 +17,40 @@ class Column {
 private:
     std::string name;
     std::vector<std::optional<DataType>> values;
-    bool isNullable;
-    DataType defaultValue;
 
 public:
-    Column(const std::string& columnName, bool nullable = false, const DataType& defaultVal = DataType())
-            : name(columnName), isNullable(nullable), defaultValue(defaultVal) {}
+    Column(const std::string& columnName)
+            : name(columnName) {}
     // BASIC HANDLING
-    std::string getName();
-    std::vector<std::optional<DataType>> getOptionalValues();
-    std::vector<DataType> getValues();
+    std::string getName() const;
+    std::vector<std::optional<DataType>> getOptionalValues() const;
+    std::vector<DataType> getValues() const;
     void setName(const std::string& n);
     size_t size() const;
     bool isEmpty() const;
     std::string getDataType() const;
     template<class T> bool isCompatible(const T& value) const;
     bool isNull(size_t index) const;
+    void print() const;
+
+    // DATA MANIPULATION
+    void add(const std::optional<DataType>& element);
+    void removeAt(size_t index);
+    void remove(const DataType& element);
+    void removeAll(const DataType& element);
+    void update(size_t index, const DataType& element);
+    template<class Iterable> void addAll(const Iterable& it);
 
     // AGGREGATIONS
     DataType min() const requires Numeric<DataType>;
     DataType max() const requires Numeric<DataType>;
-    DataType mean() const requires Numeric<DataType>;
-    DataType median() const requires Numeric<DataType>;
+    double mean() const requires Numeric<DataType>;
+    double median() const requires Numeric<DataType>;
     double std() const requires Numeric<DataType>;
     double var() const requires Numeric<DataType>;
     DataType percentile(double p) const requires Numeric<DataType>;
-    double skewness() const;
+    double skewness() const requires Numeric<DataType>;
+    DataType range() const requires Numeric<DataType>;
 
     // COUNT BASED AGGREGATIONS
     size_t countNonNull() const;
@@ -52,9 +60,6 @@ public:
     // FREQUENCY
     std::map<DataType, size_t> valueCounts() const;
     std::map<DataType, size_t> histogram(size_t bins) const;
-
-    // TO STRING
-    std::string toString() const;
 };
 
 #endif //ABSTRACTPROGRAMMINGPROJECT_COLUMN_H
