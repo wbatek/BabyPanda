@@ -47,6 +47,7 @@ std::string Column<DataType>::getDataType() const {
     return typeid(DataType).name();
 }
 
+// TODO
 template<class DataType>
 template<class T>
 bool Column<DataType>::isCompatible(const T& value) const {
@@ -105,9 +106,30 @@ std::ostream& operator<<(std::ostream& os, const Column<DataType>& col) {
 // END BASIC HANDLING
 
 // DATA MANIPULATION
+
+template<class DataType>
+std::vector<size_t> Column<DataType>::find(const DataType& element) const {
+    std::vector<size_t> indices;
+    for (size_t i = 0; i < values.size(); ++i) {
+        if (values[i].has_value() && values[i].value() == element) {
+            indices.push_back(i);
+        }
+    }
+    return indices;
+}
+
+
 template<class DataType>
 void Column<DataType>::add(const std::optional<DataType> &element) {
     this->values.push_back(element);
+}
+
+template<class DataType>
+void Column<DataType>::add(const std::optional<DataType> &element, size_t index) {
+    if (index >= this->values.size()) {
+        throw InvalidIndexException();
+    }
+    this->values.insert(this->values.begin() + index, element);
 }
 
 template<class DataType>
@@ -159,6 +181,18 @@ void Column<DataType>::addAll(const Iterable &it) {
         }
     }
 }
+
+template<class DataType>
+void Column<DataType>::removeNull() {
+    for(size_t i = 0; i < this->values->size();) {
+        if(!this->values[i].has_value()) {
+            this->values.erase(this->values.begin() + i);
+        } else {
+            i++;
+        }
+    }
+}
+
 // END DATA MANIPULATION
 
 // AGGREGATIONS
@@ -322,6 +356,19 @@ size_t Column<DataType>::countDistinct() const {
     return s.size();
 }
 
+// END COUNT BASED AGGREGATIONS
+
+// FREQUENCY
+
+template<class DataType>
+std::map<DataType, size_t> Column<DataType>::valueCounts() const {
+    std::map<DataType, size_t> map;
+    for(auto& val : this->getValues()) {
+        map[val]++;
+    }
+    return map;
+}
+
 int main() {
     Column<int> col("name");
     col.add(1);
@@ -330,7 +377,7 @@ int main() {
     col.add(16);
     col.add(4);
     col.add(11);
-    col.print();
+    std::cout << col.countNonNull() << std::endl;
     std::cout << col.min() << std::endl;
     std::cout << col.max() << std::endl;
     std::cout << col.mean() << std::endl;

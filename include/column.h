@@ -34,12 +34,15 @@ public:
     void print() const;
 
     // DATA MANIPULATION
+    std::vector<size_t> find(const DataType& element) const;
     void add(const std::optional<DataType>& element);
+    void add(const std::optional<DataType>& element, size_t index);
     void removeAt(size_t index);
     void remove(const DataType& element);
     void removeAll(const DataType& element);
     void update(size_t index, const DataType& element);
     template<class Iterable> void addAll(const Iterable& it);
+    void removeNull();
 
     // AGGREGATIONS
     DataType min() const requires Numeric<DataType>;
