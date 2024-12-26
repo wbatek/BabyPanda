@@ -77,4 +77,15 @@ public:
     ~InvalidSizeException() override = default;
 };
 
+class DataFrameIntegrityException : public ColumnException {
+public:
+    DataFrameIntegrityException() : ColumnException("Can't modify a column that's part of a DataFrame") {}
+
+    const char* what() const noexcept override {
+        return "DataFrameIntegrityException. Can't modify a column that's part of a DataFrame";
+    }
+
+    ~DataFrameIntegrityException() override = default;
+};
+
 #endif //ABSTRACTPROGRAMMINGPROJECT_EXCEPTIONS_H
