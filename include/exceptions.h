@@ -9,10 +9,11 @@ public:
     explicit ColumnException(const std::string& message)
             : std::runtime_error(message), msg(message) {}
 
-    // Override what() to return the custom message
     virtual const char* what() const noexcept override {
         return msg.c_str();
     }
+
+    ~ColumnException() override = default;
 
 protected:
     std::string msg;
@@ -23,10 +24,11 @@ public:
     EmptyColumnException()
             : ColumnException("Column is empty and cannot be processed.") {}
 
-    // Optionally override what() if you need more customization
     const char* what() const noexcept override {
         return "EmptyColumnException: Column is empty and cannot be processed.";
     }
+
+    ~EmptyColumnException() override = default;
 };
 
 class InvalidIndexException : public ColumnException {
@@ -37,6 +39,8 @@ public:
     const char* what() const noexcept override {
         return "InvalidIndexException: Invalid index accessed in column.";
     }
+
+    ~InvalidIndexException() override = default;
 };
 
 class NoValidValuesException : public ColumnException {
@@ -47,6 +51,30 @@ public:
     const char* what() const noexcept override {
         return "NoValidValuesException: No valid values in column.";
     }
+
+    ~NoValidValuesException() override = default;
+};
+
+class InvalidTypeException : public ColumnException {
+public:
+    InvalidTypeException() : ColumnException("Provided type is not compatible with DataType of the Column") {}
+
+    const char* what() const noexcept override {
+        return "InvalidTypeException: Provided type is not compatible with DataType of the Column";
+    }
+
+    ~InvalidTypeException() override = default;
+};
+
+class InvalidSizeException : public ColumnException {
+public:
+    InvalidSizeException() : ColumnException("Invalid column size") {}
+
+    const char* what() const noexcept override {
+        return "InvalidSizeException. Invalid column size";
+    }
+
+    ~InvalidSizeException() override = default;
 };
 
 #endif //ABSTRACTPROGRAMMINGPROJECT_EXCEPTIONS_H

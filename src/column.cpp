@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <iomanip>
 #include <set>
+#include <functional>
 
 // BASIC HANDLING
 
@@ -90,14 +91,40 @@ std::ostream& operator<<(std::ostream& os, const Column<DataType>& col) {
         }
     }
 
-    os << "|" << std::setw(maxWidth + 2) << col.getName() << "|" << std::endl;
-    std::string separator(maxWidth + 2, '-');
+    os << "|" << std::setw(maxWidth) << col.getName() << "|" << std::endl;
+    std::string separator(maxWidth, '-');
     os << "|" << separator << "|" << std::endl;
     for (const auto& value : col.getOptionalValues()) {
         if (value.has_value()) {
-            os << "| " << std::setw(maxWidth) << value.value() << " |" << std::endl;
+            os << "|" << std::setw(maxWidth) << value.value() << "|" << std::endl;
         } else {
-            os << "| " << std::setw(maxWidth) << "-" << " |" << std::endl;
+            os << "|" << std::setw(maxWidth) << "-" << "|" << std::endl;
+        }
+    }
+    return os;
+}
+
+template<>
+std::ostream& operator<<(std::ostream& os, const Column<std::string>& col) {
+    size_t maxWidth = col.getName().length();
+    for(const auto& val : col.getOptionalValues()) {
+        if(val.has_value()) {
+            size_t currentWidth = val.value().length();
+            maxWidth = std::max(maxWidth, currentWidth);
+        }
+        else {
+            maxWidth = std::max(maxWidth, size_t(1));
+        }
+    }
+
+    os << "|" << std::setw(maxWidth) << col.getName() << "|" << std::endl;
+    std::string separator(maxWidth, '-');
+    os << "|" << separator << "|" << std::endl;
+    for (const auto& value : col.getOptionalValues()) {
+        if (value.has_value()) {
+            os << "|" << std::setw(maxWidth) << value.value() << "|" << std::endl;
+        } else {
+            os << "|" << std::setw(maxWidth) << "-" << "|" << std::endl;
         }
     }
     return os;
@@ -189,6 +216,44 @@ void Column<DataType>::removeNull() {
             this->values.erase(this->values.begin() + i);
         } else {
             i++;
+        }
+    }
+}
+
+template<class DataType>
+void Column<DataType>::replace(const DataType &oldValue, const DataType &newValue) {
+    for (auto& val : values) {
+        if(val.has_value() && val.value() == oldValue) {
+            val = newValue;
+        }
+    }
+}
+
+template<class DataType>
+template<class Predicate>
+void Column<DataType>::removeIf(Predicate pred) {
+    auto it = std::remove_if(values.begin(), values.end(),
+                             [&](const std::optional<DataType>& val) {
+                                 return val.has_value() && pred(val.value());
+                             });
+    values.erase(it, values.end());
+}
+
+template<class DataType>
+void Column<DataType>::fillNull(const DataType &value) {
+    for(size_t i = 0; i < this->values.size(); i++) {
+        if(!this->values[i].has_value()) {
+            this->values[i] = value;
+        }
+    }
+}
+
+template<class DataType>
+void Column<DataType>::fillNullWithMean() requires Numeric<DataType> {
+    DataType mean = this->mean();
+    for(size_t i = 0; i < this->values.size(); i++) {
+        if(!this->values[i].has_value()) {
+            this->values[i] = mean;
         }
     }
 }
@@ -333,7 +398,7 @@ double Column<DataType>::skewness() const requires Numeric<DataType> {
 
 template<class DataType>
 DataType Column<DataType>::range() const requires Numeric<DataType> {
-    return this->max() - this->min();
+    return this->max() - this->min() + 1;
 }
 
 // END AGGREGATIONS
@@ -369,18 +434,176 @@ std::map<DataType, size_t> Column<DataType>::valueCounts() const {
     return map;
 }
 
+template<class DataType>
+std::vector<size_t> Column<DataType>::histogram(size_t numberOfBins) const requires Numeric<DataType> {
+    DataType range = this->range();
+    DataType min = this->min();
+    std::vector<size_t> bins(numberOfBins, 0);
+    for(auto& x : this->getValues()) {
+        int bin = std::floor((x - min) * numberOfBins / range);
+        bins[bin]++;
+    }
+    return bins;
+}
+
+
+// END FREQUENCY
+
+// STRING BASED METHODS
+
+template<class DataType>
+std::string Column<DataType>::concatenate(const std::string& linker) const requires StringType<DataType> {
+    std::string result;
+    std::vector<DataType> filteredValues = this->getValues();
+    for(size_t i = 0; i < filteredValues.size(); i++) {
+        result += filteredValues[i] + linker;
+    }
+    result += filteredValues[filteredValues.size() - 1];
+    return result;
+}
+
+// END STRING BASED METHODS
+
+// SORT
+
+template<class DataType>
+void Column<DataType>::sort(bool ascending) requires Sortable<DataType> {
+    if(ascending) {
+        std::sort(this->values.begin(), this->values.end());
+    }
+    else {
+        std::sort(this->values.begin(), this->values.end(), std::greater<>());
+    }
+}
+
+// FILTER
+
+template<class DataType>
+template<class Predicate>
+Column<DataType> Column<DataType>::filter(Predicate pred) const {
+    Column<DataType> result(this->name + "_filtered");
+    for(const auto& val : this->getValues()) {
+        if(pred(val)) {
+            result.add(val);
+        }
+    }
+    return result;
+}
+
+// OPERATORS
+
+// helper method
+
+template<class DataType>
+Column<DataType> Column<DataType>::applyOperation(const DataType& value, std::function<DataType(const DataType&, const DataType&)> op) const requires Numeric<DataType> {
+    Column<DataType> result(this->name + "_operation");
+    for(const auto& val : this->values) {
+        if(val.has_value()) {
+            result.add(op(val.value(), value));
+        }
+        else {
+            result.add(std::nullopt);
+        }
+    }
+    return result;
+}
+
+template<class DataType>
+Column<DataType> Column<DataType>::operator+(const DataType& value) const requires Numeric<DataType> {
+    return applyOperation(value, std::plus<DataType>());
+}
+
+template<class DataType>
+Column<DataType> Column<DataType>::operator-(const DataType& value) const requires Numeric<DataType> {
+    return applyOperation(value, std::minus<DataType>());
+}
+
+template<class DataType>
+Column<DataType> Column<DataType>::operator*(const DataType& value) const requires Numeric<DataType> {
+    return applyOperation(value, std::multiplies<DataType>());
+}
+
+template<class DataType>
+Column<DataType> Column<DataType>::operator/(const DataType& value) const requires Numeric<DataType> {
+    return applyOperation(value, std::divides<DataType>());
+}
+
+template<class DataType>
+Column<DataType> Column<DataType>::applyOperation(const Column<DataType>& other, std::function<DataType(const DataType&, const DataType&)> op) const requires Numeric<DataType> {
+    if (this->values.size() != other.values.size()) {
+        throw InvalidSizeException();
+    }
+
+    Column<DataType> result(this->name + "_operation_" + other.name);
+
+    for (size_t i = 0; i < this->values.size(); ++i) {
+        if (this->values[i].has_value() && other.values[i].has_value()) {
+            result.add(op(this->values[i].value(), other.values[i].value()));
+        } else {
+            result.add(std::nullopt);
+        }
+    }
+
+    return result;
+}
+
+template<class DataType>
+Column<DataType> Column<DataType>::operator+(const Column<DataType>& other) const requires Numeric<DataType> {
+    return applyOperation(other, std::plus<DataType>());
+}
+
+template<class DataType>
+Column<DataType> Column<DataType>::operator-(const Column<DataType>& other) const requires Numeric<DataType> {
+    return applyOperation(other, std::minus<DataType>());
+}
+
+template<class DataType>
+Column<DataType> Column<DataType>::operator*(const Column<DataType>& other) const requires Numeric<DataType> {
+    return applyOperation(other, std::multiplies<DataType>());
+}
+
+template<class DataType>
+Column<DataType> Column<DataType>::operator/(const Column<DataType>& other) const requires Numeric<DataType> {
+    return applyOperation(other, std::divides<DataType>());
+}
+
+
+
+
 int main() {
-    Column<int> col("name");
-    col.add(1);
-    col.add(2);
-    col.add(20);
-    col.add(16);
-    col.add(4);
-    col.add(11);
-    std::cout << col.countNonNull() << std::endl;
-    std::cout << col.min() << std::endl;
-    std::cout << col.max() << std::endl;
-    std::cout << col.mean() << std::endl;
-    std::cout << col.median() << std::endl;
+//    Column<int> col("n");
+//    col.add(1);
+//    col.add(2);
+//    col.add(20);
+//    col.add(16);
+//    col.add(std::nullopt);
+//    col.add(4);
+//    col.add(11);
+//    auto evenFilter = [](int value) { return value % 2 == 0; };
+//    Column<int> filteredCol = col.filter(evenFilter);
+//    filteredCol.print();
+//    col.print();
+    Column<int> col1("Column1");
+    col1.add(1);
+    col1.add(2);
+    col1.add(4);
+
+    Column<int> col2("Column2");
+    col2.add(5);
+    col2.add(std::nullopt); // Add a null value
+    col2.add(3);
+    col2.add(2);
+
+    Column<int> resultColAdd = col1 + col2;
+    Column<int> resultColSub = col1 - col2;
+    Column<int> resultColMul = col1 * col2;
+    Column<int> resultColDiv = col1 / col2; // Ensure no division by zero
+
+    resultColAdd.print(); // Should print 6, null, null, 6
+    resultColSub.print(); // Should print -4, null, null, 2
+    resultColMul.print(); // Should print 5, null, null, 8
+    resultColDiv.print(); // Should print 0.2, null, null, 2
+
+
 }
 
