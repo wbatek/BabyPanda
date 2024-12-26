@@ -26,22 +26,28 @@ class Column {
 private:
     std::string name;
     std::vector<std::optional<DataType>> values;
+    bool isPartOfDataFrame;
 
 public:
-    Column() : name("Unnamed") {}
+    // CONSTRUCTORS
+    Column() : name("Unnamed"), isPartOfDataFrame(false) {}
     Column(const std::string& columnName)
-            : name(columnName) {}
+            : name(columnName), isPartOfDataFrame(false) {}
+
     // BASIC HANDLING
     std::string getName() const;
     std::vector<std::optional<DataType>> getOptionalValues() const;
     std::vector<DataType> getValues() const;
     void setName(const std::string& n);
+    void setIsPartOfDataFrame(bool p);
+    bool getIsPartOfDataFrame() const;
     size_t size() const;
     bool isEmpty() const;
     std::string getDataType() const;
     template<class T> bool isCompatible(const T& value) const;
     bool isNull(size_t index) const;
     void print() const;
+    void checkDataFrameIntegrity() const;
 
     // DATA MANIPULATION
     std::vector<size_t> find(const DataType& element) const;
@@ -68,6 +74,7 @@ public:
     DataType percentile(double p) const requires Numeric<DataType>;
     double skewness() const requires Numeric<DataType>;
     DataType range() const requires Numeric<DataType>;
+    DataType mode() const;
 
     // COUNT BASED AGGREGATIONS
     size_t countNonNull() const;

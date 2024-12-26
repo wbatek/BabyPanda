@@ -34,6 +34,16 @@ void Column<DataType>::setName(const std::string& n) {
 }
 
 template<class DataType>
+void Column<DataType>::setIsPartOfDataFrame(bool p) {
+    this->isPartOfDataFrame = p;
+}
+
+template<class DataType>
+bool Column<DataType>::getIsPartOfDataFrame() const {
+    return this->isPartOfDataFrame;
+}
+
+template<class DataType>
 size_t Column<DataType>::size() const {
     return this->values.size();
 }
@@ -130,6 +140,13 @@ std::ostream& operator<<(std::ostream& os, const Column<std::string>& col) {
     return os;
 }
 
+template<class DataType>
+void Column<DataType>::checkDataFrameIntegrity() const {
+    if(isPartOfDataFrame) {
+        throw DataFrameIntegrityException();
+    }
+}
+
 // END BASIC HANDLING
 
 // DATA MANIPULATION
@@ -148,27 +165,27 @@ std::vector<size_t> Column<DataType>::find(const DataType& element) const {
 
 template<class DataType>
 void Column<DataType>::add(const std::optional<DataType> &element) {
+    checkDataFrameIntegrity();
     this->values.push_back(element);
 }
 
 template<class DataType>
 void Column<DataType>::add(const std::optional<DataType> &element, size_t index) {
-    if (index >= this->values.size()) {
-        throw InvalidIndexException();
-    }
+    if (index >= this->values.size()) throw InvalidIndexException();
+    checkDataFrameIntegrity();
     this->values.insert(this->values.begin() + index, element);
 }
 
 template<class DataType>
 void Column<DataType>::removeAt(size_t index) {
-    if (index >= this->values.size()) {
-        throw InvalidIndexException();
-    }
+    if (index >= this->values.size()) throw InvalidIndexException();
+    checkDataFrameIntegrity();
     this->values.erase(this->values.begin() + index);
 }
 
 template<class DataType>
 void Column<DataType>::remove(const DataType &element) {
+    checkDataFrameIntegrity();
     for(size_t i = 0; i < this->values.size(); i++) {
         if(this->values[i].has_value()) {
             if(this->values[i].value() == element) {
@@ -181,6 +198,7 @@ void Column<DataType>::remove(const DataType &element) {
 
 template<class DataType>
 void Column<DataType>::removeAll(const DataType& element) {
+    checkDataFrameIntegrity();
     for(size_t i = 0; i < this->values.size(); i++) {
         if(this->values[i].has_value()) {
             if(this->values[i].value() == element) {
@@ -192,14 +210,14 @@ void Column<DataType>::removeAll(const DataType& element) {
 
 template<class DataType>
 void Column<DataType>::update(size_t index, const DataType& element) {
-    if (index >= this->values.size()) {
-        throw InvalidIndexException();
-    }
+    if (index >= this->values.size()) throw InvalidIndexException();
+    this->values[index] = element;
 }
 
 template<class DataType>
 template<class Iterable>
 void Column<DataType>::addAll(const Iterable &it) {
+    checkDataFrameIntegrity();
     for(const auto& elem : it) {
         if (isCompatible(elem)) {
             this->add(std::optional<DataType>(elem));
@@ -211,6 +229,7 @@ void Column<DataType>::addAll(const Iterable &it) {
 
 template<class DataType>
 void Column<DataType>::removeNull() {
+    checkDataFrameIntegrity();
     for(size_t i = 0; i < this->values->size();) {
         if(!this->values[i].has_value()) {
             this->values.erase(this->values.begin() + i);
@@ -232,6 +251,7 @@ void Column<DataType>::replace(const DataType &oldValue, const DataType &newValu
 template<class DataType>
 template<class Predicate>
 void Column<DataType>::removeIf(Predicate pred) {
+    checkDataFrameIntegrity();
     auto it = std::remove_if(values.begin(), values.end(),
                              [&](const std::optional<DataType>& val) {
                                  return val.has_value() && pred(val.value());
@@ -401,6 +421,21 @@ DataType Column<DataType>::range() const requires Numeric<DataType> {
     return this->max() - this->min() + 1;
 }
 
+template<class DataType>
+DataType Column<DataType>::mode() const {
+    if(isEmpty()) throw EmptyColumnException();
+    if(std::none_of(this->values.begin(), this->values.end(), [](const auto& val) { return val.has_value(); })) {
+        throw NoValidValuesException();
+    }
+
+    std::map<DataType, size_t> valueCounts = this->valueCounts();
+    auto modeIt = std::max_element(valueCounts.begin(), valueCounts.end(),
+                                   [](const auto& a, const auto& b) {
+                                        return a.second < b.second;
+    });
+    return modeIt->first;
+}
+
 // END AGGREGATIONS
 
 // COUNT BASED AGGREGATIONS
@@ -468,6 +503,7 @@ std::string Column<DataType>::concatenate(const std::string& linker) const requi
 
 template<class DataType>
 void Column<DataType>::sort(bool ascending) requires Sortable<DataType> {
+    checkDataFrameIntegrity();
     if(ascending) {
         std::sort(this->values.begin(), this->values.end());
     }
@@ -583,27 +619,32 @@ int main() {
 //    Column<int> filteredCol = col.filter(evenFilter);
 //    filteredCol.print();
 //    col.print();
-    Column<int> col1("Column1");
-    col1.add(1);
-    col1.add(2);
-    col1.add(4);
+//    Column<int> col1("Column1");
+//    col1.add(1);
+//    col1.add(2);
+//    col1.add(4);
+//
+//    Column<int> col2("Column2");
+//    col2.add(5);
+//    col2.add(std::nullopt); // Add a null value
+//    col2.add(3);
+//    col2.add(2);
+//
+//    Column<int> resultColAdd = col1 + col2;
+//    Column<int> resultColSub = col1 - col2;
+//    Column<int> resultColMul = col1 * col2;
+//    Column<int> resultColDiv = col1 / col2; // Ensure no division by zero
+//
+//    resultColAdd.print(); // Should print 6, null, null, 6
+//    resultColSub.print(); // Should print -4, null, null, 2
+//    resultColMul.print(); // Should print 5, null, null, 8
+//    resultColDiv.print(); // Should print 0.2, null, null, 2
 
-    Column<int> col2("Column2");
-    col2.add(5);
-    col2.add(std::nullopt); // Add a null value
-    col2.add(3);
-    col2.add(2);
-
-    Column<int> resultColAdd = col1 + col2;
-    Column<int> resultColSub = col1 - col2;
-    Column<int> resultColMul = col1 * col2;
-    Column<int> resultColDiv = col1 / col2; // Ensure no division by zero
-
-    resultColAdd.print(); // Should print 6, null, null, 6
-    resultColSub.print(); // Should print -4, null, null, 2
-    resultColMul.print(); // Should print 5, null, null, 8
-    resultColDiv.print(); // Should print 0.2, null, null, 2
-
-
+    Column<int> colInt("IntColumn");
+    colInt.add(1);
+    colInt.add(2);
+    colInt.add(2);
+    colInt.add(3);
+    std::cout << colInt.mode();
 }
 
