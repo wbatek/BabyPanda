@@ -21,8 +21,36 @@ concept Sortable =
             a == b;
         };
 
+class BaseColumn {
+protected:
+    std::string name;
+    bool isPartOfDataFrame;
+
+public:
+    BaseColumn(const std::string& name) : name(name), isPartOfDataFrame(false) {}
+    virtual ~BaseColumn() = default;
+
+    std::string getName() const { return this->name; }
+    void setName(const std::string& n) { name = n; }
+    virtual size_t size() const = 0;
+    virtual bool isEmpty() const = 0;
+
+    virtual bool isNull(size_t index) const = 0;
+    virtual size_t countNonNull() const = 0;
+    virtual size_t countNull() const = 0;
+
+    virtual size_t countDistinct() const = 0;
+    virtual void sort(bool ascending) = 0;
+
+    virtual void add(const std::optional<std::string>& element) = 0;
+    virtual void add(const std::optional<std::string>& element, size_t index) = 0;
+    virtual void removeAt(size_t index) = 0;
+    virtual void remove(const std::string& value) = 0;
+};
+
+
 template<class DataType>
-class Column {
+class Column : public BaseColumn {
 private:
     std::string name;
     std::vector<std::optional<DataType>> values;
@@ -30,15 +58,13 @@ private:
 
 public:
     // CONSTRUCTORS
-    Column() : name("Unnamed"), isPartOfDataFrame(false) {}
+    Column() : BaseColumn("Unnamed") {}
     Column(const std::string& columnName)
-            : name(columnName), isPartOfDataFrame(false) {}
+            : BaseColumn(columnName) {}
 
     // BASIC HANDLING
-    std::string getName() const;
     std::vector<std::optional<DataType>> getOptionalValues() const;
     std::vector<DataType> getValues() const;
-    void setName(const std::string& n);
     void setIsPartOfDataFrame(bool p);
     bool getIsPartOfDataFrame() const;
     size_t size() const;
@@ -105,6 +131,7 @@ public:
     Column<DataType> operator-(const Column<DataType>& other) const requires Numeric<DataType>;
     Column<DataType> operator*(const Column<DataType>& other) const requires Numeric<DataType>;
     Column<DataType> operator/(const Column<DataType>& other) const requires Numeric<DataType>;
+    DataType operator[](size_t index) const;
 
 };
 
