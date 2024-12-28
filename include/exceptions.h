@@ -88,4 +88,45 @@ public:
     ~DataFrameIntegrityException() override = default;
 };
 
+// -----------------
+
+class DataFrameException : public std::runtime_error {
+public:
+    explicit DataFrameException(const std::string& message)
+            : std::runtime_error(message), msg(message) {}
+
+    virtual const char* what() const noexcept override {
+        return msg.c_str();
+    }
+
+    ~DataFrameException() override = default;
+
+protected:
+    std::string msg;
+};
+
+class InvalidNumberOfColumnsException : public DataFrameException {
+public:
+    InvalidNumberOfColumnsException()
+            : DataFrameException("DataFrame has invalid number of columns.") {}
+
+    const char* what() const noexcept override {
+        return "InvalidNumberOfColumnsException: DataFrame has invalid number of columns.";
+    }
+
+    ~InvalidNumberOfColumnsException() override = default;
+};
+
+class InvalidNameException : public DataFrameException {
+public:
+    InvalidNameException()
+            : DataFrameException("Column with that name doesn't exist in the DataFrame.") {}
+
+    const char* what() const noexcept override {
+        return "InvalidNameException: Column with that name doesn't exist in the DataFrame.";
+    }
+
+    ~InvalidNameException() override = default;
+};
+
 #endif //ABSTRACTPROGRAMMINGPROJECT_EXCEPTIONS_H
