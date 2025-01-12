@@ -371,6 +371,15 @@ void Column<DataType>::fillNullWithMean() requires Numeric<DataType> {
     }
 }
 
+template<class DataType>
+void Column<DataType>::fillNull() {
+    for(size_t i = 0; i < this->values.size(); i++) {
+        if(!this->values[i].has_value()) {
+            this->values[i] = DataType();
+        }
+    }
+}
+
 // END DATA MANIPULATION
 
 // AGGREGATIONS
@@ -593,17 +602,17 @@ DataType Column<DataType>::mode() const {
 // COUNT BASED AGGREGATIONS
 
 template<class DataType>
-size_t Column<DataType>::countNonNull() const {
+int Column<DataType>::countNonNull() const {
     return this->getValues().size();
 }
 
 template<class DataType>
-size_t Column<DataType>::countNull() const {
+int Column<DataType>::countNull() const {
     return this->getOptionalValues().size() - this->getValues().size();
 }
 
 template<class DataType>
-size_t Column<DataType>::countDistinct() const {
+int Column<DataType>::countDistinct() const {
     std::set<DataType> s(this->getValues().begin(), this->getValues().end());
     return s.size();
 }

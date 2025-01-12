@@ -3,6 +3,8 @@
 #include "include/column.h"
 #include "src/column.cpp"
 #include <iostream>
+#include <fstream>
+#include <sstream>
 #include <map>
 #include <any>
 
@@ -176,6 +178,17 @@ void DataFrame::addColumn(const Column<T>& column) {
     this->columnIndex[columnName] = this->columns.size() - 1;
 }
 
+void DataFrame::addColumn(const std::string& columnName) {
+    columns[columnName] = Column<ColumnType>(columnName);
+    columnIndex[columnName] = this->columns.size() - 1;
+}
+
+void DataFrame::addColumn() {
+    Column<ColumnType> newColumn = Column<ColumnType>();
+    columns[newColumn.getName()] = newColumn;
+    columnIndex[newColumn.getName()] = this->columns.size() - 1;
+}
+
 void DataFrame::addRow(const std::vector<std::optional<ColumnType>>& row) {
     if(row.size() != this->numberOfColumns()) {
         throw std::invalid_argument("Row size does not match number of columns");
@@ -190,17 +203,22 @@ void DataFrame::addRow(const std::vector<std::optional<ColumnType>>& row) {
             if(cellValue.has_value()) {
                 bool typeMismatch = false;
                 try {
-                    auto firstNonNull = column.getValues()[0];
-                    std::visit([&](auto&& value) {
-                        using T = std::decay_t<decltype(value)>;
-                        try {
-                            (void)std::get<T>(*cellValue);
+                    if(column.getValues().empty()) {
+                        typeMismatch = false;
+                    }
+                    else {
+                        auto firstNonNull = column.getValues()[0];
+                        std::visit([&](auto&& value) {
+                            using T = std::decay_t<decltype(value)>;
+                            try {
+                                (void)std::get<T>(*cellValue);
 
-                            typeMismatch = false;
-                        } catch (const std::bad_variant_access& ex) {
-                            typeMismatch = true;
-                        }
-                    }, firstNonNull);
+                                typeMismatch = false;
+                            } catch (const std::bad_variant_access& ex) {
+                                typeMismatch = true;
+                            }
+                        }, firstNonNull);
+                    }
                 }
                 catch (...) {
                     typeMismatch = false;
@@ -324,48 +342,230 @@ DataFrame DataFrame::filterRows(const std::function<bool(const std::vector<std::
 }
 
 // STATISTICS
-std::map<std::string, double> DataFrame::describe() const {
-    std::map<std::string, double> description;
-    for(auto& pair : columns) {
-        const auto& column = pair.second;
-        std::vector<double> statistics;
-
-        description[column.getName() + "_mean"] = column.mean();
-        description[column.getName() + "_std"] = column.std();
-        description[column.getName() + "_var"] = column.var();
-        description[column.getName() + "_max"] = std::get<double>(column.max());
-        description[column.getName() + "_min"] = std::get<double>(column.min());
-        description[column.getName() + "_median"] = column.median();
-        description[column.getName() + "_countNull"] = column.countNull();
-        description[column.getName() + "_nunique"] = column.countDistinct();
+std::map<std::string, std::map<std::string, ColumnType>> DataFrame::aggregate(const std::vector<std::string>& operations) const {
+    std::map<std::string, std::map<std::string, ColumnType>> results;
+    for (const auto& [colName, column] : columns) {
+        std::map<std::string, ColumnType> columnResults;
+        for (const auto& op : operations) {
+            if (op == "min") {
+                columnResults["min"] = std::visit([](const auto& value) -> ColumnType {
+                    return value;
+                }, column.min());
+            } else if (op == "max") {
+                columnResults["max"] = std::visit([](const auto& value) -> ColumnType {
+                    return value;
+                }, column.max());
+            } else if (op == "mean") {
+                columnResults["mean"] = column.mean();
+            } else if (op == "std") {
+                columnResults["std"] = column.std();
+            } else if (op == "var") {
+                columnResults["var"] = column.var();
+            } else if (op == "countNull") {
+                columnResults["countNull"] = column.countNull();
+            } else if (op == "nunique") {
+                columnResults["nunique"] = column.countDistinct();
+//            } else if (op == "median") {
+//                columnResults["median"] = column.median();
+            } else {
+                throw std::invalid_argument("Unsupported operation: " + op);
+            }
+        }
+        results[colName] = columnResults;
     }
-    return description;
+    return results;
 }
 
+std::map<std::string, std::map<std::string, ColumnType>> DataFrame::describe() const {
+    return this->aggregate({"mean", "std", "var", "min", "max", "median"});
+}
 
-int main() {
-    Column<std::string> col1("col1");
-    col1.add("AAA");
-    col1.add("BBB");
-    Column<double> col2("col2");
-    col2.add(4.2);
-    col2.add(true);
-    DataFrame df;
-    df.addColumn(col1);
-    df.addColumn(col2);
+// NULLS
+void DataFrame::fillNullWithDefault() {
+    for(auto& colPair : this->columns) {
+        colPair.second.fillNull();
+    }
+}
 
-    df.print();
-    std::vector<std::optional<ColumnType>> newRow = {
-            std::make_optional<std::string>("Charlie"),
-            std::make_optional<double>(35.5),// Age
-             // Name
-    };
-    df.addRow(newRow);
-    df.print();
-    auto desc = df.describe();
-    for(auto& pair : desc) {
-        std::cout << pair.first << " " << pair.second << std::endl;
+void DataFrame::fillNull(std::vector<ColumnType> &values) {
+    if(values.size() != this->numberOfColumns()) {
+        throw InvalidSizeException();
+    }
+    int i = 0;
+    for(auto& colPair : this->columns) {
+        colPair.second.fillNull(values[i]);
+        i++;
+    }
+}
+
+// SORTING
+DataFrame DataFrame::sortBy(const std::string &columnName, bool ascending) const {
+    auto colIter = columns.find(columnName);
+    if (colIter == columns.end()) {
+        throw std::invalid_argument("Column " + columnName + " does not exist in the DataFrame.");
+    }
+    const auto& sortColumn = colIter->second;
+    size_t nRows = numberOfRows();
+
+    std::vector<size_t> rowIndices(nRows);
+    for (size_t i = 0; i < nRows; ++i) {
+        rowIndices[i] = i;
     }
 
-    std::cout << df.numberOfColumns() << " " << df.numberOfRows();
+    std::sort(rowIndices.begin(), rowIndices.end(), [&](size_t i, size_t j) {
+        const auto& valueA = sortColumn[i];
+        const auto& valueB = sortColumn[j];
+        if (!valueA.has_value() || !valueB.has_value()) {
+            return ascending ? valueA.has_value() : valueB.has_value();
+        }
+        if (ascending) {
+            return valueA < valueB;
+        } else {
+            return valueA > valueB;
+        }
+    });
+
+    DataFrame sortedDf;
+    sortedDf.name = this->name;
+    for (const auto& [colName, column] : columns) {
+        Column<ColumnType> sortedColumn(column.getName());
+        for (size_t index : rowIndices) {
+            sortedColumn.add(column[index]);
+        }
+        sortedDf.columns[colName] = sortedColumn;
+    }
+
+    return sortedDf;
+}
+
+DataFrame DataFrame::readCSV(const std::string &filePath, const std::string& separator, bool hasHeaderLine) {
+    std::ifstream file(filePath);
+    if (!file.is_open()) {
+        throw std::runtime_error("Could not open the file: " + filePath);
+    }
+    std::vector<std::string> columnNames;
+    DataFrame df;
+
+    if(hasHeaderLine) {
+        std::string headerLine;
+        std::getline(file, headerLine);
+        std::stringstream headerStream(headerLine);
+
+        std::string columnName;
+        while (std::getline(headerStream, columnName, separator[0])) {
+            columnNames.push_back(columnName);
+            df.addColumn(columnName);
+        }
+    }
+
+    std::string rowLine;
+    while(std::getline(file, rowLine)) {
+        std::stringstream rowStream(rowLine);
+        std::string cell;
+        size_t colIndex = 0;
+
+        std::vector<std::optional<ColumnType>> rowValues(df.numberOfColumns());
+        while(std::getline(rowStream, cell, separator[0])) {
+            if (colIndex < df.numberOfColumns()) {
+                if(cell.empty()) {
+                    rowValues[colIndex] = std::nullopt;
+                }
+                else {
+                    try {
+                        double doubleVal = std::stod(cell);
+                        rowValues[colIndex] = doubleVal;
+                    } catch (...) {
+                        try {
+                            int intVal = std::stoi(cell);
+                            rowValues[colIndex] = intVal;
+                        } catch (...) {
+                            try {
+                                bool boolVal = (bool)std::stoi(cell);
+                                rowValues[colIndex] = boolVal;
+                            }
+                            catch (...) {
+                                rowValues[colIndex] = cell;
+                            }
+                        }
+                    }
+                }
+            }
+            ++colIndex;
+        }
+        df.addRow(rowValues);
+    }
+    return df;
+}
+
+void DataFrame::saveCSV(const std::string &filePath, const std::string &separator, bool saveHeaderLine) {
+    std::ofstream file(filePath);
+    if(!file.is_open()) {
+        throw std::runtime_error("Could not open the file: " + filePath);
+    }
+
+    if(saveHeaderLine) {
+        size_t cnt = 0;
+        for(const auto& pair : columns) {
+            file << pair.first;
+            cnt++;
+            if(cnt < columns.size()) {
+                file << separator;
+            }
+        }
+        file << "\n";
+    }
+
+    for(size_t i = 0; i < this->numberOfRows(); i++) {
+        size_t cnt = 0;
+        for(const auto& pair : columns) {
+            auto column = pair.second;
+            if(column[i].has_value()) {
+                std::visit([&file](auto&& val) { file << val; }, column[i].value());
+            }
+            cnt++;
+            if(cnt < columns.size()) {
+                file << separator;
+            }
+        }
+        file << "\n";
+    }
+    file.close();
+}
+
+int main() {
+//    Column<std::string> col1("col1");
+//    col1.add("AAA");
+//    col1.add("BBB");
+//    Column<double> col2("col2");
+//    col2.add(4.2);
+//    col2.add(true);
+//    DataFrame df;
+//    df.addColumn(col1);
+//    df.addColumn(col2);
+//
+//    df.print();
+//    std::vector<std::optional<ColumnType>> newRow = {
+//            std::make_optional<std::string>("Charlie"),
+//            std::make_optional<double>(35.5),// Age
+//             // Name
+//    };
+//    df.addRow(newRow);
+//    df.print();
+//    std::vector<std::string> op = {"mean", "std"};
+//    auto results = df.aggregate(op);
+//    for (const auto& [colName, colResults] : results) {
+//        std::cout << "Column: " << colName << "\n";
+//        for (const auto& [opName, value] : colResults) {
+//            std::cout << "  " << opName << ": ";
+//            std::visit([](const auto& val) { std::cout << val << "\n"; }, value);
+//        }
+//    }
+//
+//    DataFrame sortedDf = df.sortBy("col2");
+//    sortedDf.print();
+//
+//    std::cout << df.numberOfColumns() << " " << df.numberOfRows();
+    DataFrame df = DataFrame::readCSV("../test1.csv", ",", true);
+    df.print();
+    df.saveCSV("../test2.csv", ";", true);
 }

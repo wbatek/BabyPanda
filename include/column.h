@@ -101,6 +101,7 @@ public:
     template<class Predicate> void removeIf(Predicate pred);
     void fillNull(const DataType& value);
     void fillNullWithMean() requires Numeric<DataType>;
+    void fillNull();
 
     // AGGREGATIONS
     DataType min() const requires Numeric<DataType>;
@@ -115,9 +116,9 @@ public:
     DataType mode() const;
 
     // COUNT BASED AGGREGATIONS
-    size_t countNonNull() const;
-    size_t countNull() const;
-    size_t countDistinct() const;
+    int countNonNull() const;
+    int countNull() const;
+    int countDistinct() const;
 
     // FREQUENCY
     std::map<DataType, size_t> valueCounts() const;
