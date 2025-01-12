@@ -453,8 +453,52 @@ DataFrame DataFrame::readCSV(const std::string &filePath, const std::string& sep
 
         std::string columnName;
         while (std::getline(headerStream, columnName, separator[0])) {
-            columnNames.push_back(columnName);
             df.addColumn(columnName);
+        }
+    }
+    else {
+        std::string firstLine;
+        if (std::getline(file, firstLine)) {
+            std::stringstream firstLineStream(firstLine);
+            std::string cell;
+            size_t inferredColumnCount = 0;
+
+            while (std::getline(firstLineStream, cell, separator[0])) {
+                ++inferredColumnCount;
+                df.addColumn();
+            }
+
+            std::stringstream rowStream(firstLine);
+            std::vector<std::optional<ColumnType>> rowValues(df.numberOfColumns());
+            size_t colIndex = 0;
+            while(std::getline(rowStream, cell, separator[0])) {
+                if (colIndex < df.numberOfColumns()) {
+                    if(cell.empty()) {
+                        rowValues[inferredColumnCount] = std::nullopt;
+                    }
+                    else {
+                        try {
+                            double doubleVal = std::stod(cell);
+                            rowValues[colIndex] = doubleVal;
+                        } catch (...) {
+                            try {
+                                int intVal = std::stoi(cell);
+                                rowValues[colIndex] = intVal;
+                            } catch (...) {
+                                try {
+                                    bool boolVal = (bool)std::stoi(cell);
+                                    rowValues[colIndex] = boolVal;
+                                }
+                                catch (...) {
+                                    rowValues[colIndex] = cell;
+                                }
+                            }
+                        }
+                    }
+                }
+                ++colIndex;
+            }
+            df.addRow(rowValues);
         }
     }
 
@@ -565,7 +609,7 @@ int main() {
 //    sortedDf.print();
 //
 //    std::cout << df.numberOfColumns() << " " << df.numberOfRows();
-    DataFrame df = DataFrame::readCSV("../test1.csv", ",", true);
+    DataFrame df = DataFrame::readCSV("../test1.csv", ",", false);
     df.print();
     df.saveCSV("../test2.csv", ";", true);
 }
