@@ -129,4 +129,16 @@ public:
     ~InvalidNameException() override = default;
 };
 
+class TypeMismatchException : public DataFrameException {
+public:
+    TypeMismatchException()
+            : DataFrameException("Column type mismatch.") {}
+
+    const char* what() const noexcept override {
+        return "TypeMismatchException: Column type mismatch.";
+    }
+
+    ~TypeMismatchException() override = default;
+};
+
 #endif //ABSTRACTPROGRAMMINGPROJECT_EXCEPTIONS_H

@@ -4,13 +4,11 @@
 #include <iomanip>
 #include <set>
 #include <functional>
+#include <variant>
+
+using ColumnType = std::variant<int, double, bool, std::string>;
 
 // BASIC HANDLING
-
-template<class DataType>
-std::string Column<DataType>::getName() const {
-    return this->name;
-}
 
 template<class DataType>
 std::vector<std::optional<DataType>> Column<DataType>::getOptionalValues() const {
@@ -26,11 +24,6 @@ std::vector<DataType> Column<DataType>::getValues() const {
         }
     }
     return extractedValues;
-}
-
-template<class DataType>
-void Column<DataType>::setName(const std::string& n) {
-    this->name = n;
 }
 
 template<class DataType>
@@ -58,23 +51,6 @@ std::string Column<DataType>::getDataType() const {
     return typeid(DataType).name();
 }
 
-// TODO
-template<class DataType>
-template<class T>
-bool Column<DataType>::isCompatible(const T& value) const {
-    if constexpr (std::is_constructible_v<DataType, T>) {
-        try {
-            DataType temp = static_cast<DataType>(value);
-            (void)temp;
-            return true;
-        } catch (...) {
-            return false;
-        }
-    } else {
-        return false;
-    }
-}
-
 template<class DataType>
 bool Column<DataType>::isNull(size_t index) const {
     if(index > this->size()) {
@@ -88,55 +64,108 @@ void Column<DataType>::print() const {
     std::cout << *this;
 }
 
-template<class DataType>
-std::ostream& operator<<(std::ostream& os, const Column<DataType>& col) {
-    size_t maxWidth = col.getName().length();
-    for(const auto& val : col.getOptionalValues()) {
-        if(val.has_value()) {
-            size_t currentWidth = std::to_string(val.value()).length();
-            maxWidth = std::max(maxWidth, currentWidth);
-        }
-        else {
-            maxWidth = std::max(maxWidth, size_t(1));
-        }
-    }
+//// TODO
+//// FIX
+//template<class DataType>
+//void Column<DataType>::printElement(const std::optional<std::any>& value, std::ostream& os, size_t width) const {
+//    if (value.has_value()) {
+//        DataType valueToPrint = std::any_cast<DataType>(value.value());
+//        os << "|" << std::setw(width) << valueToPrint;
+//    }
+//    else {
+//        os << "|" << std::setw(width) << "null";
+//    }
+//}
 
-    os << "|" << std::setw(maxWidth) << col.getName() << "|" << std::endl;
-    std::string separator(maxWidth, '-');
-    os << "|" << separator << "|" << std::endl;
-    for (const auto& value : col.getOptionalValues()) {
-        if (value.has_value()) {
-            os << "|" << std::setw(maxWidth) << value.value() << "|" << std::endl;
+//std::ostream& operator<<(std::ostream& os, const Column<ColumnType>& col) {
+////    size_t maxWidth = col.getName().length();
+////    for(const auto& val : col.getOptionalValues()) {
+////        if(val.has_value()) {
+////            if constexpr(std::is_same_v<DataType, std::string>) {
+////                maxWidth = std::max(maxWidth, val.value().size());
+////            }
+////            else {
+////                size_t currentWidth = std::to_string(val.value()).length();
+////                maxWidth = std::max(maxWidth, currentWidth);
+////            }
+////
+////        }
+////        else {
+////            maxWidth = std::max(maxWidth, size_t(4));
+////        }
+////    }
+////
+////    os << "|" << std::setw(maxWidth) << col.getName() << "|" << std::endl;
+////    std::string separator(maxWidth, '-');
+////    os << "|" << separator << "|" << std::endl;
+////    for (const auto& value : col.getOptionalValues()) {
+////        if (value.has_value()) {
+////            os << "|" << std::setw(maxWidth) << value.value() << "|" << std::endl;
+////        } else {
+////            os << "|" << std::setw(maxWidth) << "null" << "|" << std::endl;
+////        }
+////    }
+////    return os;
+//    for(auto& optVar : col.getOptionalValues()) {
+//        if (optVar) { // Check if the optional has a value
+//            const auto& value = *optVar; // Extract the value from the optional
+//
+//            // Check which type is stored in the variant and print it
+//            if (std::holds_alternative<int>(value)) {
+//                std::cout << std::get<int>(value);
+//            } else if (std::holds_alternative<double>(value)) {
+//                std::cout << std::get<double>(value);
+//            } else if (std::holds_alternative<bool>(value)) {
+//                std::cout << std::get<bool>(value);
+//            } else if (std::holds_alternative<std::string>(value)) {
+//                std::cout << std::get<std::string>(value);
+//            }
+//        } else {
+//            std::cout << "nullopt"; // Optional is empty
+//        }
+//        std::cout << " ";
+//    }
+//    std::cout << std::endl;
+//    return os;
+//}
+
+template <typename DataType>
+std::ostream& operator<<(std::ostream& os, const Column<DataType>& col) {
+    os << "Column: " << col.getName() << "\n";
+
+    for (const auto& optVar : col.getOptionalValues()) {
+        if (optVar.has_value()) {
+            os << optVar.value();
         } else {
-            os << "|" << std::setw(maxWidth) << "-" << "|" << std::endl;
+            os << "null";
         }
+        os << " ";
     }
+    os << "\n";
+
     return os;
 }
 
-template<>
-std::ostream& operator<<(std::ostream& os, const Column<std::string>& col) {
-    size_t maxWidth = col.getName().length();
-    for(const auto& val : col.getOptionalValues()) {
-        if(val.has_value()) {
-            size_t currentWidth = val.value().length();
-            maxWidth = std::max(maxWidth, currentWidth);
-        }
-        else {
-            maxWidth = std::max(maxWidth, size_t(1));
-        }
-    }
 
-    os << "|" << std::setw(maxWidth) << col.getName() << "|" << std::endl;
-    std::string separator(maxWidth, '-');
-    os << "|" << separator << "|" << std::endl;
-    for (const auto& value : col.getOptionalValues()) {
-        if (value.has_value()) {
-            os << "|" << std::setw(maxWidth) << value.value() << "|" << std::endl;
+template <>
+std::ostream& operator<<(std::ostream& os, const Column<ColumnType>& col) {
+    // Print the column name
+    os << "Column: " << col.getName() << "\n";
+
+    // Print all values in the column
+    for (const auto& optVar : col.getOptionalValues()) {
+        if (optVar.has_value()) {
+            // Use std::visit to handle the variant's value
+            std::visit([&os](const auto& value) {
+                os << value; // Print the value, deduced type
+            }, optVar.value());
         } else {
-            os << "|" << std::setw(maxWidth) << "-" << "|" << std::endl;
+            os << "null"; // Optional is empty
         }
+        os << " ";
     }
+    os << "\n";
+
     return os;
 }
 
@@ -145,6 +174,26 @@ void Column<DataType>::checkDataFrameIntegrity() const {
     if(isPartOfDataFrame) {
         throw DataFrameIntegrityException();
     }
+}
+
+template<class DataType>
+size_t Column<DataType>::getWidth() const {
+    size_t maxWidth = name.length();
+
+    for (const auto& value : values) {
+        size_t currentWidth = 0;
+        if (value.has_value()) {
+            if constexpr (std::is_same_v<DataType, std::string>) {
+                currentWidth = value.value().length();
+            } else {
+                currentWidth = std::to_string(value.value()).length();
+            }
+        } else {
+            currentWidth = 4;
+        }
+        maxWidth = std::max(maxWidth, currentWidth);
+    }
+    return maxWidth;
 }
 
 // END BASIC HANDLING
@@ -164,22 +213,66 @@ std::vector<size_t> Column<DataType>::find(const DataType& element) const {
 
 
 template<class DataType>
-void Column<DataType>::add(const std::optional<DataType> &element) {
+void Column<DataType>::add(const std::optional<ColumnType> &element) {
+//    if (!isCompatibleType(element)) {
+//        throw std::invalid_argument("Type mismatch in the value added.");
+//    }
     checkDataFrameIntegrity();
-    this->values.push_back(element);
+    if(element.has_value()) {
+        values.push_back(std::visit([](auto&& value) -> DataType {
+            if constexpr (std::is_convertible_v<std::decay_t<decltype(value)>, DataType>) {
+                return static_cast<DataType>(value);
+            } else {
+                throw std::invalid_argument("Incompatible type in variant.");
+            }
+        }, *element));
+    }
+    else {
+        values.push_back(std::nullopt);
+    }
 }
 
 template<class DataType>
-void Column<DataType>::add(const std::optional<DataType> &element, size_t index) {
+void Column<DataType>::addToColumnFromRow(const std::optional<DataType>& value) {
+    if(value.has_value()) {
+        values.push_back(value.value());
+    }
+    else {
+        values.push_back(std::nullopt);
+    }
+}
+
+template<class DataType>
+void Column<DataType>::add(const std::optional<ColumnType> &element, size_t index) {
     if (index >= this->values.size()) throw InvalidIndexException();
+//    if (!isCompatibleType(element)) {
+//        throw std::invalid_argument("Type mismatch in the value added.");
+//    }
     checkDataFrameIntegrity();
-    this->values.insert(this->values.begin() + index, element);
+    if(element.has_value()) {
+        DataType value = std::visit([](auto&& value) -> DataType {
+            if constexpr (std::is_convertible_v<std::decay_t<decltype(value)>, DataType>) {
+                return static_cast<DataType>(value);
+            } else {
+                throw std::invalid_argument("Incompatible type in variant.");
+            }
+        }, *element);
+        values.insert(values.begin() + index, value);
+    }
+    else {
+        values.insert(values.begin() + index, std::nullopt);
+    }
 }
 
 template<class DataType>
 void Column<DataType>::removeAt(size_t index) {
     if (index >= this->values.size()) throw InvalidIndexException();
     checkDataFrameIntegrity();
+    this->values.erase(this->values.begin() + index);
+}
+
+template<class DataType>
+void Column<DataType>::removeAtFromRow(size_t index) {
     this->values.erase(this->values.begin() + index);
 }
 
@@ -292,8 +385,8 @@ DataType Column<DataType>::min() const requires Numeric<DataType> {
     }
     DataType minValue;
     bool foundValidValue = false;
-    std::vector<DataType> filtederValues = this->getValues();
-    for(const auto& val : filtederValues) {
+    std::vector<DataType> filteredValues = this->getValues();
+    for(const auto& val : filteredValues) {
         if (!foundValidValue || val < minValue) {
             minValue = val;
             foundValidValue = true;
@@ -323,7 +416,7 @@ DataType Column<DataType>::max() const requires Numeric<DataType> {
 }
 
 template<class DataType>
-double Column<DataType>::mean() const requires Numeric<DataType> {
+double Column<DataType>::mean() const {
     if(this->isEmpty()) {
         throw EmptyColumnException();
     }
@@ -336,6 +429,33 @@ double Column<DataType>::mean() const requires Numeric<DataType> {
     }
     return sum / this->getValues().size();
 }
+
+template<>
+double Column<ColumnType>::mean() const {
+    if (this->isEmpty()) {
+        throw EmptyColumnException();
+    }
+    if (std::none_of(this->values.begin(), this->values.end(), [](const auto& val) { return val.has_value(); })) {
+        throw NoValidValuesException();
+    }
+    double sum = 0.0;
+
+    // Iterate through the values, extract numeric ones and calculate the sum
+    for (const auto& val : this->getOptionalValues()) {
+        if (val.has_value()) {
+            if (std::holds_alternative<int>(*val)) {
+                sum += static_cast<double>(std::get<int>(*val));  // Handle int as double
+            } else if (std::holds_alternative<double>(*val)) {
+                sum += std::get<double>(*val);  // Handle double as is
+            } else if (std::holds_alternative<bool>(*val)) {
+                sum += static_cast<double>(std::get<bool>(*val) ? 1 : 0);  // Treat bool as 1 or 0
+            }
+        }
+    }
+
+    return sum / this->getValues().size();
+}
+
 
 template<class DataType>
 double Column<DataType>::median() const requires Numeric<DataType> {
@@ -353,7 +473,7 @@ double Column<DataType>::median() const requires Numeric<DataType> {
 }
 
 template<class DataType>
-double Column<DataType>::std() const requires Numeric<DataType> {
+double Column<DataType>::std() const {
     if(this->isEmpty()) throw EmptyColumnException();
     if(std::none_of(this->values.begin(), this->values.end(), [](const auto& val) { return val.has_value(); })) {
         throw NoValidValuesException();
@@ -365,6 +485,38 @@ double Column<DataType>::std() const requires Numeric<DataType> {
     }
     return std::sqrt(ssq / (this->getValues().size() - 1));
 }
+
+template<>
+double Column<ColumnType>::std() const {
+    if (this->isEmpty()) throw EmptyColumnException();
+    if (std::none_of(this->values.begin(), this->values.end(), [](const auto& val) { return val.has_value(); })) {
+        throw NoValidValuesException();
+    }
+
+    double mean = this->mean();
+    double ssq = 0.0;
+    size_t validCount = 0;
+
+    // Iterate through the values and calculate the sum of squared differences
+    for (const auto& val : this->getOptionalValues()) {
+        if (val.has_value()) {
+            // Use std::visit to extract numeric values from the variant
+            double numericValue = std::visit([](const auto& v) -> double {
+                if constexpr (std::is_arithmetic_v<decltype(v)>) {
+                    return static_cast<double>(v);  // Handle int, double
+                }
+                return 0.0;  // Ignore non-numeric types (bool, string)
+            }, *val);
+
+            ssq += (numericValue - mean) * (numericValue - mean);
+            ++validCount;
+        }
+    }
+
+    // Return the standard deviation, adjusting for the sample size
+    return std::sqrt(ssq / (validCount - 1)); // Sample standard deviation
+}
+
 
 template<class DataType>
 double Column<DataType>::var() const requires Numeric<DataType> {
@@ -603,18 +755,25 @@ Column<DataType> Column<DataType>::operator/(const Column<DataType>& other) cons
     return applyOperation(other, std::divides<DataType>());
 }
 
+template<class DataType>
+std::optional<DataType> Column<DataType>::operator[](size_t index) const {
+    if (index >= values.size()) {
+        throw InvalidIndexException();
+    }
+    return values[index];
+}
 
 
-
-int main() {
+//int main() {
 //    Column<int> col("n");
 //    col.add(1);
 //    col.add(2);
-//    col.add(20);
+//    col.add(1);
 //    col.add(16);
 //    col.add(std::nullopt);
 //    col.add(4);
-//    col.add(11);
+//    col.add(11, 2);
+//    col.print();
 //    auto evenFilter = [](int value) { return value % 2 == 0; };
 //    Column<int> filteredCol = col.filter(evenFilter);
 //    filteredCol.print();
@@ -623,12 +782,12 @@ int main() {
 //    col1.add(1);
 //    col1.add(2);
 //    col1.add(4);
+//    col1.print();
 //
 //    Column<int> col2("Column2");
 //    col2.add(5);
 //    col2.add(std::nullopt); // Add a null value
 //    col2.add(3);
-//    col2.add(2);
 //
 //    Column<int> resultColAdd = col1 + col2;
 //    Column<int> resultColSub = col1 - col2;
@@ -639,12 +798,4 @@ int main() {
 //    resultColSub.print(); // Should print -4, null, null, 2
 //    resultColMul.print(); // Should print 5, null, null, 8
 //    resultColDiv.print(); // Should print 0.2, null, null, 2
-
-    Column<int> colInt("IntColumn");
-    colInt.add(1);
-    colInt.add(2);
-    colInt.add(2);
-    colInt.add(3);
-    std::cout << colInt.mode();
-}
-
+//}

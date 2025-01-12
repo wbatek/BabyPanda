@@ -6,9 +6,16 @@
 #include <map>
 #include <iterator>
 #include "exceptions.h"
+#include <random>
 
 template<typename T>
-concept Numeric = std::is_arithmetic_v<T>;
+concept NumericVariant = requires(T v) {
+    { std::holds_alternative<int>(v) } -> std::convertible_to<bool>;
+    { std::holds_alternative<double>(v) } -> std::convertible_to<bool>;
+};
+
+template<typename T>
+concept Numeric = std::is_arithmetic_v<T> || NumericVariant<T>;
 
 template<typename T>
 concept StringType = std::is_same_v<T, std::string>;
@@ -21,46 +28,46 @@ concept Sortable =
             a == b;
         };
 
-class BaseColumn {
-protected:
-    std::string name;
-    bool isPartOfDataFrame;
-
-public:
-    BaseColumn(const std::string& name) : name(name), isPartOfDataFrame(false) {}
-    virtual ~BaseColumn() = default;
-
-    std::string getName() const { return this->name; }
-    void setName(const std::string& n) { name = n; }
-    virtual size_t size() const = 0;
-    virtual bool isEmpty() const = 0;
-
-    virtual bool isNull(size_t index) const = 0;
-    virtual size_t countNonNull() const = 0;
-    virtual size_t countNull() const = 0;
-
-    virtual size_t countDistinct() const = 0;
-    virtual void sort(bool ascending) = 0;
-
-    virtual void add(const std::optional<std::string>& element) = 0;
-    virtual void add(const std::optional<std::string>& element, size_t index) = 0;
-    virtual void removeAt(size_t index) = 0;
-    virtual void remove(const std::string& value) = 0;
-};
-
+using ColumnType = std::variant<int, double, bool, std::string>;
 
 template<class DataType>
-class Column : public BaseColumn {
+class Column {
 private:
     std::string name;
     std::vector<std::optional<DataType>> values;
     bool isPartOfDataFrame;
 
+    std::string generateRandomName(size_t length = 8) {
+        const std::string chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+        std::random_device rd;
+        std::mt19937 gen(rd());
+        std::uniform_int_distribution<> dist(0, chars.size() - 1);
+
+        std::string randomName;
+        for (size_t i = 0; i < length; ++i) {
+            randomName += chars[dist(gen)];
+        }
+        return randomName;
+    }
+
 public:
     // CONSTRUCTORS
-    Column() : BaseColumn("Unnamed") {}
+    Column() : name(generateRandomName()) {}
     Column(const std::string& columnName)
-            : BaseColumn(columnName) {}
+            : name(columnName) {}
+//    Column(const Column<DataType>& other) {
+//        name = other.name;
+//        values = other.values;
+//    }
+
+    Column(const std::string& columnName, const std::vector<std::optional<DataType>>& values)
+            : name(columnName), values(values) {}
+    Column(std::string name, std::vector<DataType> values)
+            : name(name), values(values) {}
+    Column(const Column& other) = default;
+    Column& operator=(const Column& other) = default;
+    Column(Column&& other) noexcept = default;
+    Column& operator=(Column&& other) noexcept = default;
 
     // BASIC HANDLING
     std::vector<std::optional<DataType>> getOptionalValues() const;
@@ -73,13 +80,18 @@ public:
     template<class T> bool isCompatible(const T& value) const;
     bool isNull(size_t index) const;
     void print() const;
+//    void printElement(const std::optional<DataType>& value, std::ostream& os, size_t width) const;
     void checkDataFrameIntegrity() const;
+    size_t getWidth() const;
+    std::string getName() const { return this->name; }
 
     // DATA MANIPULATION
     std::vector<size_t> find(const DataType& element) const;
-    void add(const std::optional<DataType>& element);
-    void add(const std::optional<DataType>& element, size_t index);
+    void add(const std::optional<ColumnType>& element);
+    void addToColumnFromRow(const std::optional<DataType>& value);
+    void add(const std::optional<ColumnType>& element, size_t index);
     void removeAt(size_t index);
+    void removeAtFromRow(size_t index);
     void remove(const DataType& element);
     void removeAll(const DataType& element);
     void update(size_t index, const DataType& element);
@@ -93,9 +105,9 @@ public:
     // AGGREGATIONS
     DataType min() const requires Numeric<DataType>;
     DataType max() const requires Numeric<DataType>;
-    double mean() const requires Numeric<DataType>;
+    double mean() const;
     double median() const requires Numeric<DataType>;
-    double std() const requires Numeric<DataType>;
+    double std() const;
     double var() const requires Numeric<DataType>;
     DataType percentile(double p) const requires Numeric<DataType>;
     double skewness() const requires Numeric<DataType>;
@@ -131,8 +143,7 @@ public:
     Column<DataType> operator-(const Column<DataType>& other) const requires Numeric<DataType>;
     Column<DataType> operator*(const Column<DataType>& other) const requires Numeric<DataType>;
     Column<DataType> operator/(const Column<DataType>& other) const requires Numeric<DataType>;
-    DataType operator[](size_t index) const;
-
+    std::optional<DataType> operator[](size_t index) const;
 };
 
 #endif //ABSTRACTPROGRAMMINGPROJECT_COLUMN_H
