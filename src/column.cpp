@@ -385,7 +385,7 @@ void Column<DataType>::fillNull() {
 // AGGREGATIONS
 
 template<class DataType>
-DataType Column<DataType>::min() const requires Numeric<DataType> {
+DataType Column<DataType>::min() const {
     if(this->isEmpty()) {
         throw EmptyColumnException();
     }
@@ -405,7 +405,7 @@ DataType Column<DataType>::min() const requires Numeric<DataType> {
 }
 
 template<class DataType>
-DataType Column<DataType>::max() const requires Numeric<DataType> {
+DataType Column<DataType>::max() const {
     if(this->isEmpty()) {
         throw EmptyColumnException();
     }
@@ -449,15 +449,14 @@ double Column<ColumnType>::mean() const {
     }
     double sum = 0.0;
 
-    // Iterate through the values, extract numeric ones and calculate the sum
     for (const auto& val : this->getOptionalValues()) {
         if (val.has_value()) {
             if (std::holds_alternative<int>(*val)) {
-                sum += static_cast<double>(std::get<int>(*val));  // Handle int as double
+                sum += static_cast<double>(std::get<int>(*val));
             } else if (std::holds_alternative<double>(*val)) {
-                sum += std::get<double>(*val);  // Handle double as is
+                sum += std::get<double>(*val);
             } else if (std::holds_alternative<bool>(*val)) {
-                sum += static_cast<double>(std::get<bool>(*val) ? 1 : 0);  // Treat bool as 1 or 0
+                sum += static_cast<double>(std::get<bool>(*val) ? 1 : 0);
             }
         }
     }
@@ -467,7 +466,7 @@ double Column<ColumnType>::mean() const {
 
 
 template<class DataType>
-double Column<DataType>::median() const requires Numeric<DataType> {
+double Column<DataType>::median() const {
     if(this->isEmpty()) throw EmptyColumnException();
     if(std::none_of(this->values.begin(), this->values.end(), [](const auto& val) { return val.has_value(); })) {
         throw NoValidValuesException();
@@ -479,6 +478,28 @@ double Column<DataType>::median() const requires Numeric<DataType> {
         return static_cast<double>((filteredValues[size / 2 - 1] + filteredValues[size / 2]) / 2.0);
     }
     return static_cast<double>(filteredValues[size / 2]);
+}
+
+template<>
+double Column<ColumnType>::median() const {
+    if (this->isEmpty()) throw EmptyColumnException();
+    std::vector<double> filteredValues;
+    for (const auto& val : this->getValues()) {
+        std::visit([&filteredValues](const auto& v) {
+            using T = std::decay_t<decltype(v)>;
+            if constexpr (std::is_arithmetic_v<T>) {
+                filteredValues.push_back(static_cast<double>(v));
+            }
+        }, val);
+    }
+    if(filteredValues.empty()) return 0.0;
+    std::sort(filteredValues.begin(), filteredValues.end());
+
+    size_t size = filteredValues.size();
+    if (size % 2 == 0) {
+        return (filteredValues[size / 2 - 1] + filteredValues[size / 2]) / 2.0;
+    }
+    return filteredValues[size / 2];
 }
 
 template<class DataType>
@@ -506,29 +527,25 @@ double Column<ColumnType>::std() const {
     double ssq = 0.0;
     size_t validCount = 0;
 
-    // Iterate through the values and calculate the sum of squared differences
     for (const auto& val : this->getOptionalValues()) {
         if (val.has_value()) {
-            // Use std::visit to extract numeric values from the variant
             double numericValue = std::visit([](const auto& v) -> double {
                 if constexpr (std::is_arithmetic_v<decltype(v)>) {
-                    return static_cast<double>(v);  // Handle int, double
+                    return static_cast<double>(v);
                 }
-                return 0.0;  // Ignore non-numeric types (bool, string)
+                return 0.0;
             }, *val);
 
             ssq += (numericValue - mean) * (numericValue - mean);
             ++validCount;
         }
     }
-
-    // Return the standard deviation, adjusting for the sample size
-    return std::sqrt(ssq / (validCount - 1)); // Sample standard deviation
+    return std::sqrt(ssq / (validCount - 1));
 }
 
 
 template<class DataType>
-double Column<DataType>::var() const requires Numeric<DataType> {
+double Column<DataType>::var() const {
     return std::pow(this->std(), 2);
 }
 

@@ -55,11 +55,6 @@ public:
     Column() : name(generateRandomName()) {}
     Column(const std::string& columnName)
             : name(columnName) {}
-//    Column(const Column<DataType>& other) {
-//        name = other.name;
-//        values = other.values;
-//    }
-
     Column(const std::string& columnName, const std::vector<std::optional<DataType>>& values)
             : name(columnName), values(values) {}
     Column(std::string name, std::vector<DataType> values)
@@ -80,7 +75,6 @@ public:
     template<class T> bool isCompatible(const T& value) const;
     bool isNull(size_t index) const;
     void print() const;
-//    void printElement(const std::optional<DataType>& value, std::ostream& os, size_t width) const;
     void checkDataFrameIntegrity() const;
     size_t getWidth() const;
     std::string getName() const { return this->name; }
@@ -104,12 +98,12 @@ public:
     void fillNull();
 
     // AGGREGATIONS
-    DataType min() const requires Numeric<DataType>;
-    DataType max() const requires Numeric<DataType>;
+    DataType min() const;
+    DataType max() const;
     double mean() const;
-    double median() const requires Numeric<DataType>;
+    double median() const;
     double std() const;
-    double var() const requires Numeric<DataType>;
+    double var() const;
     DataType percentile(double p) const requires Numeric<DataType>;
     double skewness() const requires Numeric<DataType>;
     DataType range() const requires Numeric<DataType>;
