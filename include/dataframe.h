@@ -44,20 +44,22 @@ public:
     // STATISTICS
     std::map<std::string, std::map<std::string, ColumnType>> describe() const;
     std::map<std::string, std::map<std::string, ColumnType>> aggregate(const std::vector<std::string>& operations) const;
-    std::map<std::string, double> min() const;
-    std::map<std::string, double> max() const;
-    std::map<std::string, double> mean() const;
-    std::map<std::string, double> var() const;
-    std::map<std::string, double> std() const;
-    std::map<std::string, double> median() const;
-    std::map<std::string, double> skewness() const;
+    std::map<std::string, std::map<std::string, ColumnType>> min() const;
+    std::map<std::string, std::map<std::string, ColumnType>> max() const;
+    std::map<std::string, std::map<std::string, ColumnType>> mean() const;
+    std::map<std::string, std::map<std::string, ColumnType>> var() const;
+    std::map<std::string, std::map<std::string, ColumnType>> std() const;
+    std::map<std::string, std::map<std::string, ColumnType>> median() const;
+    std::map<std::string, std::map<std::string, ColumnType>> skewness() const;
 
+    // NULL-HANDLING
     void fillNullWithDefault();
     void fillNull(std::vector<ColumnType>& values);
 
     // SORTING
     DataFrame sortBy(const std::string& columnName, bool ascending = true) const;
 
+    // FILES
     static DataFrame readCSV(const std::string& filePath, const std::string& separator = ",", bool hasHeaderLine = true);
     void saveCSV(const std::string& filePath, const std::string& separator = ",", bool saveHeaderLine = true);
 };

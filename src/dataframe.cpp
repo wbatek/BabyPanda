@@ -109,52 +109,6 @@ Column<ColumnType>& DataFrame::getColumn(const std::string &n) {
     return columns.at(n);
 }
 
-//void DataFrame::addRow(const std::vector<std::optional<std::any>>& row) {
-//    if(row.size() != numberOfColumns()) {
-//        throw InvalidNumberOfColumnsException();
-//    }
-//
-//    for(size_t i = 0; i < columns.size(); i++) {
-//        auto& column = columns[i];
-//        if(row[i].has_value()) {
-//            column->addToColumnFromRow(row[i].value());
-//        }
-//        else {
-//            column->addToColumnFromRow(std::nullopt);
-//        }
-//    }
-//}
-
-//void DataFrame::removeRow(size_t index) {
-//    if(index >= numberOfRows()) throw InvalidIndexException();
-//    for(auto & column : columns) {
-//        column.removeAtFromRow(index);
-//    }
-//}
-
-//void DataFrame::renameColumn(size_t index, const std::string& newName) {
-//    if(index >= numberOfColumns()) throw InvalidIndexException();
-//    columns[index]->setName(newName);
-//}
-
-//void DataFrame::removeColumn(const std::string& columnName) {
-//    auto it = std::find_if(columns.begin(), columns.end(),
-//                           [&columnName](const std::shared_ptr<BaseColumn>& column) {
-//                               return column->getName() == columnName; // Assuming BaseColumn has a getName() method
-//                           });
-//
-//    if (it != columns.end()) {
-//        columns.erase(it);
-//    }
-//}
-
-//void DataFrame::removeColumn(size_t index) {
-//    if(index >= numberOfColumns()) throw InvalidIndexException();
-//    columns.erase(columns.begin() + index);
-//}
-
-// END DATA MANIPULATION
-
 template<class T>
 void DataFrame::addColumn(const Column<T>& column) {
     if (this->numberOfColumns() != 0) {
@@ -342,6 +296,7 @@ DataFrame DataFrame::filterRows(const std::function<bool(const std::vector<std::
 }
 
 // STATISTICS
+
 std::map<std::string, std::map<std::string, ColumnType>> DataFrame::aggregate(const std::vector<std::string>& operations) const {
     std::map<std::string, std::map<std::string, ColumnType>> results;
     for (const auto& [colName, column] : columns) {
@@ -365,8 +320,8 @@ std::map<std::string, std::map<std::string, ColumnType>> DataFrame::aggregate(co
                 columnResults["countNull"] = column.countNull();
             } else if (op == "nunique") {
                 columnResults["nunique"] = column.countDistinct();
-//            } else if (op == "median") {
-//                columnResults["median"] = column.median();
+            } else if (op == "median") {
+                columnResults["median"] = column.median();
             } else {
                 throw std::invalid_argument("Unsupported operation: " + op);
             }
@@ -380,7 +335,32 @@ std::map<std::string, std::map<std::string, ColumnType>> DataFrame::describe() c
     return this->aggregate({"mean", "std", "var", "min", "max", "median"});
 }
 
-// NULLS
+std::map<std::string, std::map<std::string, ColumnType>> DataFrame::max() const {
+    return this->aggregate({"max"});
+}
+
+std::map<std::string, std::map<std::string, ColumnType>> DataFrame::min() const {
+    return this->aggregate({"min"});
+}
+
+std::map<std::string, std::map<std::string, ColumnType>> DataFrame::mean() const {
+    return this->aggregate({"mean"});
+}
+
+std::map<std::string, std::map<std::string, ColumnType>> DataFrame::std() const {
+    return this->aggregate({"std"});
+}
+
+std::map<std::string, std::map<std::string, ColumnType>> DataFrame::var() const {
+    return this->aggregate({"var"});
+}
+
+std::map<std::string, std::map<std::string, ColumnType>> DataFrame::median() const {
+    return this->aggregate({"median"});
+}
+
+// NULL-HANDLING
+
 void DataFrame::fillNullWithDefault() {
     for(auto& colPair : this->columns) {
         colPair.second.fillNull();
@@ -399,6 +379,7 @@ void DataFrame::fillNull(std::vector<ColumnType> &values) {
 }
 
 // SORTING
+
 DataFrame DataFrame::sortBy(const std::string &columnName, bool ascending) const {
     auto colIter = columns.find(columnName);
     if (colIter == columns.end()) {
@@ -437,6 +418,8 @@ DataFrame DataFrame::sortBy(const std::string &columnName, bool ascending) const
 
     return sortedDf;
 }
+
+// FILES
 
 DataFrame DataFrame::readCSV(const std::string &filePath, const std::string& separator, bool hasHeaderLine) {
     std::ifstream file(filePath);
@@ -611,5 +594,17 @@ int main() {
 //    std::cout << df.numberOfColumns() << " " << df.numberOfRows();
     DataFrame df = DataFrame::readCSV("../test1.csv", ",", false);
     df.print();
+    auto x = df.describe();
+    for(const auto& pair : x) {
+        std::cout << pair.first << std::endl;
+        for(const auto& secondPair : pair.second) {
+            std::cout << secondPair.first << ": ";
+            std::visit([](const auto& value) {
+                std::cout << value;  // Prints the value regardless of its type
+            }, secondPair.second);
+            std::cout << std::endl;
+        }
+        std::cout << std::endl;
+    }
     df.saveCSV("../test2.csv", ";", true);
 }
