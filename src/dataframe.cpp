@@ -44,39 +44,6 @@ bool DataFrame::isEmpty() const {
     return this->numberOfRows() == 0;
 }
 
-//void DataFrame::print() const {
-//    std::vector<size_t> columnWidths(columns.size());
-//    for (size_t i = 0; i < columns.size(); ++i) {
-//        columnWidths[i] = columns[i]->getWidth();
-//    }
-//
-//    for (size_t i = 0; i < columns.size(); ++i) {
-//        std::cout << "|" << std::setw(columnWidths[i]) << columns[i]->getName();
-//    }
-//    std::cout << "|" << std::endl;
-//
-//    for (size_t i = 0; i < columns.size(); ++i) {
-//        std::cout << "+" << std::string(columnWidths[i], '-');
-//    }
-//    std::cout << "+" << std::endl;
-//
-//    // Print rows
-//    size_t maxRows = numberOfRows();
-//    for (size_t rowIndex = 0; rowIndex < maxRows; ++rowIndex) {
-//        for (size_t colIndex = 0; colIndex < columns.size(); ++colIndex) {
-//            auto& column = columns[colIndex];
-//            auto value = (*column)[rowIndex];
-////            if (value.has_value()) {
-////                std::cout << "|" << std::setw(columnWidths[colIndex]) << value.value();
-////            } else {
-////                std::cout << "|" << std::setw(columnWidths[colIndex]) << "null";
-////            }
-//            column->printElement(value, std::cout, columnWidths[colIndex]);
-//        }
-//        std::cout << "|" << std::endl;
-//    }
-//}
-
 
 std::vector<std::string> DataFrame::columnNames() const {
     std::vector<std::string> r;
@@ -238,8 +205,10 @@ Column<ColumnType> DataFrame::removeColumn(size_t index) {
 }
 
 void DataFrame::print() const {
+    size_t numRows = columns.begin()->second.size();  // Assuming all columns have the same number of rows
     size_t maxWidthFinal = 0;
 
+    // Step 1: Calculate max width of each column's values
     for (const auto& colPair : columns) {
         const std::string& columnName = colPair.first;
         const Column<ColumnType>& column = colPair.second;
@@ -265,22 +234,38 @@ void DataFrame::print() const {
         maxWidthFinal = std::max(maxWidth, maxWidthFinal);
     }
 
+    // Step 2: Print the header (column names)
     for (const auto& colPair : columns) {
-        const std::string& columnName = colPair.first;
-        const Column<ColumnType>& column = colPair.second;
+        const std::string& columnName = colPair.first;  // This is now used to print column names
+        std::cout << std::setw(maxWidthFinal) << std::left << columnName << " | ";
+    }
+    std::cout << std::endl;
 
-        std::cout << std::left << std::setw(maxWidthFinal) << columnName << ": ";
+    // Step 3: Print the separator line
+    for (const auto& colPair : columns) {
+        (void)colPair;
+        std::cout << std::setw(maxWidthFinal) << std::left << std::string(columns.size(), '-') << " | ";
+    }
+    std::cout << std::endl;
 
-        for (const auto& val : column.getOptionalValues()) {
+    // Step 4: Print the values for each row
+    for (size_t i = 0; i < numRows; ++i) {
+        for (const auto& colPair : columns) {
+            (void)colPair;
+            const std::string& columnName = colPair.first;
+            (void)columnName;
+            const Column<ColumnType>& column = colPair.second;
+            const auto& values = column.getOptionalValues();
+            const auto& val = values[i];
+
             if (val.has_value()) {
                 std::visit([&](auto&& v) {
-                    std::cout << std::setw(maxWidthFinal) << v << " ";
+                    std::cout << std::setw(maxWidthFinal) << std::left << v << " | ";
                 }, val.value());
             } else {
-                std::cout << std::setw(maxWidthFinal) << "null";
+                std::cout << std::setw(maxWidthFinal) << std::left << "null" << " | ";
             }
         }
-
         std::cout << std::endl;
     }
 }
