@@ -145,6 +145,7 @@ void DataFrame::addColumn() {
 
 void DataFrame::addRow(const std::vector<std::optional<ColumnType>>& row) {
     if(row.size() != this->numberOfColumns()) {
+        std::cout << row.size() << " " << this->numberOfColumns() << std::endl;
         throw std::invalid_argument("Row size does not match number of columns");
     }
 
@@ -237,8 +238,50 @@ Column<ColumnType> DataFrame::removeColumn(size_t index) {
 }
 
 void DataFrame::print() const {
-    for(auto& x : getColumns()) {
-        x.print();
+    size_t maxWidthFinal = 0;
+
+    for (const auto& colPair : columns) {
+        const std::string& columnName = colPair.first;
+        const Column<ColumnType>& column = colPair.second;
+
+        size_t maxWidth = columnName.size();
+
+        for (const auto& val : column.getOptionalValues()) {
+            size_t valueWidth = 0;
+
+            if (val.has_value()) {
+                std::visit([&valueWidth](auto&& v) {
+                    std::ostringstream oss;
+                    oss << v;
+                    valueWidth = oss.str().size();
+                }, val.value());
+            } else {
+                valueWidth = std::string("null").size();
+            }
+
+            maxWidth = std::max(maxWidth, valueWidth);
+        }
+
+        maxWidthFinal = std::max(maxWidth, maxWidthFinal);
+    }
+
+    for (const auto& colPair : columns) {
+        const std::string& columnName = colPair.first;
+        const Column<ColumnType>& column = colPair.second;
+
+        std::cout << std::left << std::setw(maxWidthFinal) << columnName << ": ";
+
+        for (const auto& val : column.getOptionalValues()) {
+            if (val.has_value()) {
+                std::visit([&](auto&& v) {
+                    std::cout << std::setw(maxWidthFinal) << v << " ";
+                }, val.value());
+            } else {
+                std::cout << std::setw(maxWidthFinal) << "null";
+            }
+        }
+
+        std::cout << std::endl;
     }
 }
 
@@ -559,6 +602,96 @@ void DataFrame::saveCSV(const std::string &filePath, const std::string &separato
     file.close();
 }
 
+void DataFrame::filterColumn(const std::string& columnName, std::function<bool(const ColumnType&)> predicate) {
+    if (columns.find(columnName) != columns.end()) {
+        Column<std::variant<int, double, bool, std::string>>& column = columns[columnName];
+
+        for (auto& cell : column.getOptionalValues()) {
+            if (cell.has_value()) {
+                bool shouldKeep = std::visit([&](auto&& value) {
+                    using T = std::decay_t<decltype(value)>;
+                    if constexpr (std::is_same_v<T, ColumnType>) {
+                        return predicate(value);
+                    } else {
+                        return true;
+                    }
+                }, cell.value());
+
+                if (!shouldKeep) {
+                    cell = std::nullopt;
+                }
+            }
+        }
+    } else {
+        std::cerr << "Column " << columnName << " does not exist!" << std::endl;
+    }
+}
+
+std::vector<std::optional<ColumnType>> DataFrame::getRow(size_t index) const {
+    std::vector<std::optional<ColumnType>> row;
+    for (const auto& columnPair : this->columns) {
+        row.push_back(columnPair.second.getOptionalValues()[index]);
+    }
+    return row;
+}
+
+std::vector<std::optional<ColumnType>> DataFrame::getRowWithoutGroupByColumn(size_t index, const std::string& columnName) const {
+    std::vector<std::optional<ColumnType>> row;
+    for (const auto& columnPair : this->columns) {
+        if(columnPair.first != columnName) {
+            row.push_back(columnPair.second.getOptionalValues()[index]);
+        }
+    }
+    return row;
+}
+
+DataFrame DataFrame::groupBy(const std::string &columnName, const std::string &aggregation) {
+    std::map<ColumnType, std::vector<std::vector<std::optional<ColumnType>>>> groups;
+    const Column<ColumnType>& groupColumn = columns.at(columnName);
+    size_t numRows = groupColumn.size();
+
+    for (size_t i = 0; i < numRows; ++i) {
+        if (groupColumn.getOptionalValues()[i].has_value()) {
+            ColumnType groupValue = groupColumn.getOptionalValues()[i].value();
+            groups[groupValue].push_back(getRowWithoutGroupByColumn(i, columnName));
+        }
+    }
+
+    DataFrame result(*this, columnName);
+
+    for(const auto& group : groups) {
+        std::vector<std::optional<ColumnType>> aggregatedRow;
+            if(aggregation == "sum") {
+                std::vector<double> sums = aggregateSum(group.second);
+                for (auto sum : sums) {
+                    aggregatedRow.push_back(std::make_optional<ColumnType>(sum));
+                }
+            }
+        result.addRow(aggregatedRow);
+    }
+
+    return result;
+}
+
+std::vector<double> DataFrame::aggregateSum(const std::vector<std::vector<std::optional<ColumnType>>>& groupRows) const {
+    std::vector<double> sum(groupRows.size(), 0.0);
+
+    for (const auto& row : groupRows) {
+        for (size_t i = 0; i < row.size(); ++i) {
+            const auto& cell = row[i];
+            if (cell.has_value()) {
+                sum[i] += std::visit([](const auto& value) -> double {
+                    if constexpr (std::is_arithmetic_v<std::decay_t<decltype(value)>>) {
+                        return static_cast<double>(value);
+                    }
+                    return 0.0;
+                }, cell.value());
+            }
+        }
+    }
+    return sum;
+}
+
 int main() {
 //    Column<std::string> col1("col1");
 //    col1.add("AAA");
@@ -592,7 +725,7 @@ int main() {
 //    sortedDf.print();
 //
 //    std::cout << df.numberOfColumns() << " " << df.numberOfRows();
-    DataFrame df = DataFrame::readCSV("../test1.csv", ",", false);
+    DataFrame df = DataFrame::readCSV("../test1.csv", ",", true);
     df.print();
     auto x = df.describe();
     for(const auto& pair : x) {
@@ -600,11 +733,13 @@ int main() {
         for(const auto& secondPair : pair.second) {
             std::cout << secondPair.first << ": ";
             std::visit([](const auto& value) {
-                std::cout << value;  // Prints the value regardless of its type
+                std::cout << value;
             }, secondPair.second);
             std::cout << std::endl;
         }
         std::cout << std::endl;
     }
     df.saveCSV("../test2.csv", ";", true);
+
+    df.groupBy("col1", "sum").print();
 }

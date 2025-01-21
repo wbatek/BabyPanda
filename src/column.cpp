@@ -425,74 +425,89 @@ DataType Column<DataType>::max() const {
 }
 
 template<class DataType>
-double Column<DataType>::mean() const {
+double Column<DataType>::mean() const requires DecayedOrDirectNumeric<DataType> {
     if(this->isEmpty()) {
         throw EmptyColumnException();
     }
     if(std::none_of(this->values.begin(), this->values.end(), [](const auto& val) { return val.has_value(); })) {
         throw NoValidValuesException();
     }
-    DataType sum = DataType();
-    for(const auto& val : this->getValues()) {
-        sum += val;
-    }
-    return sum / this->getValues().size();
-}
-
-template<>
-double Column<ColumnType>::mean() const {
-    if (this->isEmpty()) {
-        throw EmptyColumnException();
-    }
-    if (std::none_of(this->values.begin(), this->values.end(), [](const auto& val) { return val.has_value(); })) {
-        throw NoValidValuesException();
-    }
     double sum = 0.0;
-
-    for (const auto& val : this->getOptionalValues()) {
-        if (val.has_value()) {
-            if (std::holds_alternative<int>(*val)) {
-                sum += static_cast<double>(std::get<int>(*val));
-            } else if (std::holds_alternative<double>(*val)) {
-                sum += std::get<double>(*val);
-            } else if (std::holds_alternative<bool>(*val)) {
-                sum += static_cast<double>(std::get<bool>(*val) ? 1 : 0);
-            }
+    size_t count = 0;
+    for (const auto& val : this->getValues()) {
+        if constexpr (std::is_same_v<DataType, ColumnType>) {
+            std::visit([&sum, &count](const auto& v) {
+                using T = std::decay_t<decltype(v)>;
+                if constexpr (Numeric<T>) {
+                    sum += static_cast<double>(v);
+                    ++count;
+                }
+            }, val);
+        } else {
+            sum += static_cast<double>(*val);
+            ++count;
         }
     }
 
-    return sum / this->getValues().size();
+    if (count == 0) {
+        return std::nan("");
+    }
+    return sum / count;
 }
+
+//template<>
+//double Column<ColumnType>::mean() const {
+//    if (this->isEmpty()) {
+//        throw EmptyColumnException();
+//    }
+//    if (std::none_of(this->values.begin(), this->values.end(), [](const auto& val) { return val.has_value(); })) {
+//        throw NoValidValuesException();
+//    }
+//    double sum = 0.0;
+//    size_t count = 0;
+//
+//    for (const auto& val : this->getOptionalValues()) {
+//        if (val.has_value()) {
+//            std::visit(
+//                    [&sum, &count](const auto& v) {
+//                        using T = std::decay_t<decltype(v)>;
+//                        if constexpr (Numeric<T>) {
+//                            std::cout << v << std::endl;
+//                            sum += v;
+//                            ++count;
+//                        }
+//                    },
+//                    *val
+//            );
+//        }
+//    }
+//    if(count == 0) {
+//        return std::nan("");
+//    }
+//    return sum / count;
+//}
 
 
 template<class DataType>
-double Column<DataType>::median() const {
+double Column<DataType>::median() const requires DecayedOrDirectNumeric<DataType> {
     if(this->isEmpty()) throw EmptyColumnException();
     if(std::none_of(this->values.begin(), this->values.end(), [](const auto& val) { return val.has_value(); })) {
         throw NoValidValuesException();
     }
-    std::vector<DataType> filteredValues = this->getValues();
-    std::sort(filteredValues.begin(), filteredValues.end());
-    size_t size = filteredValues.size();
-    if(filteredValues.size() % 2 == 0) {
-        return static_cast<double>((filteredValues[size / 2 - 1] + filteredValues[size / 2]) / 2.0);
-    }
-    return static_cast<double>(filteredValues[size / 2]);
-}
-
-template<>
-double Column<ColumnType>::median() const {
-    if (this->isEmpty()) throw EmptyColumnException();
     std::vector<double> filteredValues;
     for (const auto& val : this->getValues()) {
-        std::visit([&filteredValues](const auto& v) {
-            using T = std::decay_t<decltype(v)>;
-            if constexpr (std::is_arithmetic_v<T>) {
-                filteredValues.push_back(static_cast<double>(v));
-            }
-        }, val);
+        if constexpr (std::is_same_v<DataType, ColumnType>) {
+            std::visit([&filteredValues](const auto& v) {
+                using T = std::decay_t<decltype(v)>;
+                if constexpr (Numeric<T>) {
+                    filteredValues.push_back(static_cast<double>(v));
+                }
+            }, val);
+        } else {
+            filteredValues.push_back(static_cast<double>(*val));
+        }
     }
-    if(filteredValues.empty()) return 0.0;
+    if (filteredValues.empty()) return std::nan("");
     std::sort(filteredValues.begin(), filteredValues.end());
 
     size_t size = filteredValues.size();
@@ -503,49 +518,66 @@ double Column<ColumnType>::median() const {
 }
 
 template<class DataType>
-double Column<DataType>::std() const {
+double Column<DataType>::std() const requires DecayedOrDirectNumeric<DataType> {
     if(this->isEmpty()) throw EmptyColumnException();
     if(std::none_of(this->values.begin(), this->values.end(), [](const auto& val) { return val.has_value(); })) {
         throw NoValidValuesException();
     }
     double mean = this->mean();
     double ssq = 0.0;
-    for(const auto& val : this->getValues()) {
-        ssq += (val - mean) * (val - mean);
-    }
-    return std::sqrt(ssq / (this->getValues().size() - 1));
-}
-
-template<>
-double Column<ColumnType>::std() const {
-    if (this->isEmpty()) throw EmptyColumnException();
-    if (std::none_of(this->values.begin(), this->values.end(), [](const auto& val) { return val.has_value(); })) {
-        throw NoValidValuesException();
-    }
-
-    double mean = this->mean();
-    double ssq = 0.0;
-    size_t validCount = 0;
-
-    for (const auto& val : this->getOptionalValues()) {
-        if (val.has_value()) {
-            double numericValue = std::visit([](const auto& v) -> double {
-                if constexpr (std::is_arithmetic_v<decltype(v)>) {
-                    return static_cast<double>(v);
+    size_t count = 0;
+    for (const auto& val : this->getValues()) {
+        if constexpr (std::is_same_v<DataType, ColumnType>) {
+            std::visit([&ssq, &mean, &count](const auto& v) {
+                using T = std::decay_t<decltype(v)>;
+                if constexpr (Numeric<T>) {
+                    ssq += (static_cast<double>(v) - mean) * (static_cast<double>(v) - mean);
+                    ++count;
                 }
-                return 0.0;
-            }, *val);
-
-            ssq += (numericValue - mean) * (numericValue - mean);
-            ++validCount;
+            }, val);
+        } else {
+            ssq += (static_cast<double>(val) - mean) * (static_cast<double>(val) - mean);
+            ++count;
         }
     }
-    return std::sqrt(ssq / (validCount - 1));
+
+    if (count < 2) {
+        return std::nan("");
+    }
+
+    return std::sqrt(ssq / (count - 1));
 }
+
+//template<>
+//double Column<ColumnType>::std() const {
+//    if (this->isEmpty()) throw EmptyColumnException();
+//    if (std::none_of(this->values.begin(), this->values.end(), [](const auto& val) { return val.has_value(); })) {
+//        throw NoValidValuesException();
+//    }
+//
+//    double mean = this->mean();
+//    double ssq = 0.0;
+//    size_t validCount = 0;
+//
+//    for (const auto& val : this->getOptionalValues()) {
+//        if (val.has_value()) {
+//            double numericValue = std::visit([](const auto& v) -> double {
+//                if constexpr (std::is_arithmetic_v<decltype(v)>) {
+//                    return static_cast<double>(v);
+//                }
+//                return 0.0;
+//            }, *val);
+//
+//            ssq += (numericValue - mean) * (numericValue - mean);
+//            ++validCount;
+//        }
+//    }
+//    return std::sqrt(ssq / (validCount - 1));
+//}
 
 
 template<class DataType>
-double Column<DataType>::var() const {
+double Column<DataType>::var() const requires DecayedOrDirectNumeric<DataType> {
     return std::pow(this->std(), 2);
 }
 

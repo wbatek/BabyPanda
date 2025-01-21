@@ -18,6 +18,9 @@ template<typename T>
 concept Numeric = std::is_arithmetic_v<T> || NumericVariant<T>;
 
 template<typename T>
+concept DecayedOrDirectNumeric = Numeric<T> || Numeric<std::decay_t<T>>;
+
+template<typename T>
 concept StringType = std::is_same_v<T, std::string>;
 
 template<typename T>
@@ -100,10 +103,10 @@ public:
     // AGGREGATIONS
     DataType min() const;
     DataType max() const;
-    double mean() const;
-    double median() const;
-    double std() const;
-    double var() const;
+    double mean() const requires DecayedOrDirectNumeric<DataType>;
+    double median() const requires DecayedOrDirectNumeric<DataType>;
+    double std() const requires DecayedOrDirectNumeric<DataType>;
+    double var() const requires DecayedOrDirectNumeric<DataType>;
     DataType percentile(double p) const requires Numeric<DataType>;
     double skewness() const requires Numeric<DataType>;
     DataType range() const requires Numeric<DataType>;

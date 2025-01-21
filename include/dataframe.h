@@ -16,6 +16,15 @@ private:
     std::map<std::string, size_t> columnIndex;
 
 public:
+    DataFrame() {}
+
+    DataFrame(DataFrame& other, const std::string& groupByColumn) {
+        for(const auto& columnPair : other.columns) {
+            if(columnPair.first != groupByColumn) {
+                this->addColumn(columnPair.first);
+            }
+        }
+    }
     // BASIC HANDLING
     std::string getName() const;
     std::vector<Column<ColumnType>> getColumns() const;
@@ -33,6 +42,8 @@ public:
     template<class T> void addColumn(const Column<T>& column);
     void addColumn(const std::string& name);
     void addColumn();
+    std::vector<std::optional<ColumnType>> getRow(size_t index) const;
+    std::vector<std::optional<ColumnType>> getRowWithoutGroupByColumn(size_t index, const std::string& columnName) const;
     void addRow(const std::vector<std::optional<ColumnType>>& row);
     void removeRow(size_t index);
     Column<ColumnType> removeColumn(const std::string& columnName);
@@ -50,8 +61,6 @@ public:
     std::map<std::string, std::map<std::string, ColumnType>> var() const;
     std::map<std::string, std::map<std::string, ColumnType>> std() const;
     std::map<std::string, std::map<std::string, ColumnType>> median() const;
-    std::map<std::string, std::map<std::string, ColumnType>> skewness() const;
-
     // NULL-HANDLING
     void fillNullWithDefault();
     void fillNull(std::vector<ColumnType>& values);
@@ -62,6 +71,11 @@ public:
     // FILES
     static DataFrame readCSV(const std::string& filePath, const std::string& separator = ",", bool hasHeaderLine = true);
     void saveCSV(const std::string& filePath, const std::string& separator = ",", bool saveHeaderLine = true);
+
+    void filterColumn(const std::string& columnName, std::function<bool(const ColumnType&)> predicate);
+
+    DataFrame groupBy(const std::string& columnName, const std::string& aggregation);
+    std::vector<double> aggregateSum(const std::vector<std::vector<std::optional<ColumnType>>>& groupRows) const;
 };
 
 #endif //ABSTRACTPROGRAMMINGPROJECT_DATAFRAME_H
