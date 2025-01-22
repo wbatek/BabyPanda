@@ -64,71 +64,6 @@ void Column<DataType>::print() const {
     std::cout << *this;
 }
 
-//// TODO
-//// FIX
-//template<class DataType>
-//void Column<DataType>::printElement(const std::optional<std::any>& value, std::ostream& os, size_t width) const {
-//    if (value.has_value()) {
-//        DataType valueToPrint = std::any_cast<DataType>(value.value());
-//        os << "|" << std::setw(width) << valueToPrint;
-//    }
-//    else {
-//        os << "|" << std::setw(width) << "null";
-//    }
-//}
-
-//std::ostream& operator<<(std::ostream& os, const Column<ColumnType>& col) {
-////    size_t maxWidth = col.getName().length();
-////    for(const auto& val : col.getOptionalValues()) {
-////        if(val.has_value()) {
-////            if constexpr(std::is_same_v<DataType, std::string>) {
-////                maxWidth = std::max(maxWidth, val.value().size());
-////            }
-////            else {
-////                size_t currentWidth = std::to_string(val.value()).length();
-////                maxWidth = std::max(maxWidth, currentWidth);
-////            }
-////
-////        }
-////        else {
-////            maxWidth = std::max(maxWidth, size_t(4));
-////        }
-////    }
-////
-////    os << "|" << std::setw(maxWidth) << col.getName() << "|" << std::endl;
-////    std::string separator(maxWidth, '-');
-////    os << "|" << separator << "|" << std::endl;
-////    for (const auto& value : col.getOptionalValues()) {
-////        if (value.has_value()) {
-////            os << "|" << std::setw(maxWidth) << value.value() << "|" << std::endl;
-////        } else {
-////            os << "|" << std::setw(maxWidth) << "null" << "|" << std::endl;
-////        }
-////    }
-////    return os;
-//    for(auto& optVar : col.getOptionalValues()) {
-//        if (optVar) { // Check if the optional has a value
-//            const auto& value = *optVar; // Extract the value from the optional
-//
-//            // Check which type is stored in the variant and print it
-//            if (std::holds_alternative<int>(value)) {
-//                std::cout << std::get<int>(value);
-//            } else if (std::holds_alternative<double>(value)) {
-//                std::cout << std::get<double>(value);
-//            } else if (std::holds_alternative<bool>(value)) {
-//                std::cout << std::get<bool>(value);
-//            } else if (std::holds_alternative<std::string>(value)) {
-//                std::cout << std::get<std::string>(value);
-//            }
-//        } else {
-//            std::cout << "nullopt"; // Optional is empty
-//        }
-//        std::cout << " ";
-//    }
-//    std::cout << std::endl;
-//    return os;
-//}
-
 template <typename DataType>
 std::ostream& operator<<(std::ostream& os, const Column<DataType>& col) {
     os << "Column: " << col.getName() << "\n";
@@ -444,7 +379,7 @@ double Column<DataType>::mean() const requires DecayedOrDirectNumeric<DataType> 
                 }
             }, val);
         } else {
-            sum += static_cast<double>(*val);
+            sum += static_cast<double>(val);
             ++count;
         }
     }
@@ -504,7 +439,7 @@ double Column<DataType>::median() const requires DecayedOrDirectNumeric<DataType
                 }
             }, val);
         } else {
-            filteredValues.push_back(static_cast<double>(*val));
+            filteredValues.push_back(static_cast<double>(val));
         }
     }
     if (filteredValues.empty()) return std::nan("");
@@ -582,7 +517,7 @@ double Column<DataType>::var() const requires DecayedOrDirectNumeric<DataType> {
 }
 
 template<class DataType>
-DataType Column<DataType>::percentile(double p) const requires Numeric<DataType> {
+DataType Column<DataType>::percentile(double p) const requires DecayedOrDirectNumeric<DataType> {
     if(this->isEmpty()) throw EmptyColumnException();
     if(std::none_of(this->values.begin(), this->values.end(), [](const auto& val) { return val.has_value(); })) {
         throw NoValidValuesException();
@@ -608,7 +543,7 @@ DataType Column<DataType>::percentile(double p) const requires Numeric<DataType>
 }
 
 template<class DataType>
-double Column<DataType>::skewness() const requires Numeric<DataType> {
+double Column<DataType>::skewness() const requires DecayedOrDirectNumeric<DataType> {
     double mean = this->mean();
     double std = this->std();
     double n = this->getValues().size();
@@ -627,7 +562,7 @@ double Column<DataType>::skewness() const requires Numeric<DataType> {
 }
 
 template<class DataType>
-DataType Column<DataType>::range() const requires Numeric<DataType> {
+DataType Column<DataType>::range() const requires DecayedOrDirectNumeric<DataType> {
     return this->max() - this->min() + 1;
 }
 
@@ -680,7 +615,7 @@ std::map<DataType, size_t> Column<DataType>::valueCounts() const {
 }
 
 template<class DataType>
-std::vector<size_t> Column<DataType>::histogram(size_t numberOfBins) const requires Numeric<DataType> {
+std::vector<size_t> Column<DataType>::histogram(size_t numberOfBins) const requires DecayedOrDirectNumeric<DataType> {
     DataType range = this->range();
     DataType min = this->min();
     std::vector<size_t> bins(numberOfBins, 0);
@@ -700,7 +635,7 @@ template<class DataType>
 std::string Column<DataType>::concatenate(const std::string& linker) const requires StringType<DataType> {
     std::string result;
     std::vector<DataType> filteredValues = this->getValues();
-    for(size_t i = 0; i < filteredValues.size(); i++) {
+    for(size_t i = 0; i < filteredValues.size() - 1; i++) {
         result += filteredValues[i] + linker;
     }
     result += filteredValues[filteredValues.size() - 1];
@@ -712,14 +647,15 @@ std::string Column<DataType>::concatenate(const std::string& linker) const requi
 // SORT
 
 template<class DataType>
-void Column<DataType>::sort(bool ascending) requires Sortable<DataType> {
-    checkDataFrameIntegrity();
+Column<DataType> Column<DataType>::sort(bool ascending) requires Sortable<DataType> {
+    Column<DataType> copy = Column<DataType>(*this);
     if(ascending) {
-        std::sort(this->values.begin(), this->values.end());
+        std::sort(copy.values.begin(), copy.values.end());
     }
     else {
-        std::sort(this->values.begin(), this->values.end(), std::greater<>());
+        std::sort(copy.values.begin(), copy.values.end(), std::greater<>());
     }
+    return copy;
 }
 
 // FILTER
@@ -741,7 +677,7 @@ Column<DataType> Column<DataType>::filter(Predicate pred) const {
 // helper method
 
 template<class DataType>
-Column<DataType> Column<DataType>::applyOperation(const DataType& value, std::function<DataType(const DataType&, const DataType&)> op) const requires Numeric<DataType> {
+Column<DataType> Column<DataType>::applyOperation(const DataType& value, std::function<DataType(const DataType&, const DataType&)> op) const requires DecayedOrDirectNumeric<DataType> {
     Column<DataType> result(this->name + "_operation");
     for(const auto& val : this->values) {
         if(val.has_value()) {
@@ -755,27 +691,27 @@ Column<DataType> Column<DataType>::applyOperation(const DataType& value, std::fu
 }
 
 template<class DataType>
-Column<DataType> Column<DataType>::operator+(const DataType& value) const requires Numeric<DataType> {
+Column<DataType> Column<DataType>::operator+(const DataType& value) const requires DecayedOrDirectNumeric<DataType> {
     return applyOperation(value, std::plus<DataType>());
 }
 
 template<class DataType>
-Column<DataType> Column<DataType>::operator-(const DataType& value) const requires Numeric<DataType> {
+Column<DataType> Column<DataType>::operator-(const DataType& value) const requires DecayedOrDirectNumeric<DataType> {
     return applyOperation(value, std::minus<DataType>());
 }
 
 template<class DataType>
-Column<DataType> Column<DataType>::operator*(const DataType& value) const requires Numeric<DataType> {
+Column<DataType> Column<DataType>::operator*(const DataType& value) const requires DecayedOrDirectNumeric<DataType> {
     return applyOperation(value, std::multiplies<DataType>());
 }
 
 template<class DataType>
-Column<DataType> Column<DataType>::operator/(const DataType& value) const requires Numeric<DataType> {
+Column<DataType> Column<DataType>::operator/(const DataType& value) const requires DecayedOrDirectNumeric<DataType> {
     return applyOperation(value, std::divides<DataType>());
 }
 
 template<class DataType>
-Column<DataType> Column<DataType>::applyOperation(const Column<DataType>& other, std::function<DataType(const DataType&, const DataType&)> op) const requires Numeric<DataType> {
+Column<DataType> Column<DataType>::applyOperation(const Column<DataType>& other, std::function<DataType(const DataType&, const DataType&)> op) const requires DecayedOrDirectNumeric<DataType> {
     if (this->values.size() != other.values.size()) {
         throw InvalidSizeException();
     }
@@ -794,22 +730,22 @@ Column<DataType> Column<DataType>::applyOperation(const Column<DataType>& other,
 }
 
 template<class DataType>
-Column<DataType> Column<DataType>::operator+(const Column<DataType>& other) const requires Numeric<DataType> {
+Column<DataType> Column<DataType>::operator+(const Column<DataType>& other) const requires DecayedOrDirectNumeric<DataType> {
     return applyOperation(other, std::plus<DataType>());
 }
 
 template<class DataType>
-Column<DataType> Column<DataType>::operator-(const Column<DataType>& other) const requires Numeric<DataType> {
+Column<DataType> Column<DataType>::operator-(const Column<DataType>& other) const requires DecayedOrDirectNumeric<DataType> {
     return applyOperation(other, std::minus<DataType>());
 }
 
 template<class DataType>
-Column<DataType> Column<DataType>::operator*(const Column<DataType>& other) const requires Numeric<DataType> {
+Column<DataType> Column<DataType>::operator*(const Column<DataType>& other) const requires DecayedOrDirectNumeric<DataType> {
     return applyOperation(other, std::multiplies<DataType>());
 }
 
 template<class DataType>
-Column<DataType> Column<DataType>::operator/(const Column<DataType>& other) const requires Numeric<DataType> {
+Column<DataType> Column<DataType>::operator/(const Column<DataType>& other) const requires DecayedOrDirectNumeric<DataType> {
     return applyOperation(other, std::divides<DataType>());
 }
 

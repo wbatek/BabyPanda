@@ -60,8 +60,8 @@ public:
             : name(columnName) {}
     Column(const std::string& columnName, const std::vector<std::optional<DataType>>& values)
             : name(columnName), values(values) {}
-    Column(std::string name, std::vector<DataType> values)
-            : name(name), values(values) {}
+//    Column(std::string name, std::vector<DataType> values)
+//            : name(name), values(values) {}
     Column(const Column& other) = default;
     Column& operator=(const Column& other) = default;
     Column(Column&& other) noexcept = default;
@@ -107,9 +107,9 @@ public:
     double median() const requires DecayedOrDirectNumeric<DataType>;
     double std() const requires DecayedOrDirectNumeric<DataType>;
     double var() const requires DecayedOrDirectNumeric<DataType>;
-    DataType percentile(double p) const requires Numeric<DataType>;
-    double skewness() const requires Numeric<DataType>;
-    DataType range() const requires Numeric<DataType>;
+    DataType percentile(double p) const requires DecayedOrDirectNumeric<DataType>;
+    double skewness() const requires DecayedOrDirectNumeric<DataType>;
+    DataType range() const requires DecayedOrDirectNumeric<DataType>;
     DataType mode() const;
 
     // COUNT BASED AGGREGATIONS
@@ -119,28 +119,28 @@ public:
 
     // FREQUENCY
     std::map<DataType, size_t> valueCounts() const;
-    std::vector<size_t> histogram(size_t numberOfBins) const requires Numeric<DataType>;
+    std::vector<size_t> histogram(size_t numberOfBins) const requires DecayedOrDirectNumeric<DataType>;
 
     // STRING BASED METHODS
     std::string concatenate(const std::string& linker) const requires StringType<DataType>;
 
     // SORT
-    void sort(bool ascending) requires Sortable<DataType>;
+    Column<DataType> sort(bool ascending) requires Sortable<DataType>;
 
     // FILTER
     template<class Predicate> Column<DataType> filter(Predicate pred) const;
 
     // OPERATORS
-    Column<DataType> applyOperation(const DataType& value, std::function<DataType(const DataType&, const DataType&)> op) const requires Numeric<DataType>;
-    Column<DataType> applyOperation(const Column<DataType>& other, std::function<DataType(const DataType&, const DataType&)> op) const requires Numeric<DataType>;
-    Column<DataType> operator+(const DataType& value) const requires Numeric<DataType>;
-    Column<DataType> operator-(const DataType& value) const requires Numeric<DataType>;
-    Column<DataType> operator*(const DataType& value) const requires Numeric<DataType>;
-    Column<DataType> operator/(const DataType& value) const requires Numeric<DataType>;
-    Column<DataType> operator+(const Column<DataType>& other) const requires Numeric<DataType>;
-    Column<DataType> operator-(const Column<DataType>& other) const requires Numeric<DataType>;
-    Column<DataType> operator*(const Column<DataType>& other) const requires Numeric<DataType>;
-    Column<DataType> operator/(const Column<DataType>& other) const requires Numeric<DataType>;
+    Column<DataType> applyOperation(const DataType& value, std::function<DataType(const DataType&, const DataType&)> op) const requires DecayedOrDirectNumeric<DataType>;
+    Column<DataType> applyOperation(const Column<DataType>& other, std::function<DataType(const DataType&, const DataType&)> op) const requires DecayedOrDirectNumeric<DataType>;
+    Column<DataType> operator+(const DataType& value) const requires DecayedOrDirectNumeric<DataType>;
+    Column<DataType> operator-(const DataType& value) const requires DecayedOrDirectNumeric<DataType>;
+    Column<DataType> operator*(const DataType& value) const requires DecayedOrDirectNumeric<DataType>;
+    Column<DataType> operator/(const DataType& value) const requires DecayedOrDirectNumeric<DataType>;
+    Column<DataType> operator+(const Column<DataType>& other) const requires DecayedOrDirectNumeric<DataType>;
+    Column<DataType> operator-(const Column<DataType>& other) const requires DecayedOrDirectNumeric<DataType>;
+    Column<DataType> operator*(const Column<DataType>& other) const requires DecayedOrDirectNumeric<DataType>;
+    Column<DataType> operator/(const Column<DataType>& other) const requires DecayedOrDirectNumeric<DataType>;
     std::optional<DataType> operator[](size_t index) const;
 };
 
