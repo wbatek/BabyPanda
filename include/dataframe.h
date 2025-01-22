@@ -49,12 +49,14 @@ public:
     std::vector<std::optional<ColumnType>> getRow(size_t index) const;
     std::vector<std::optional<ColumnType>> getRowWithoutGroupByColumn(size_t index, const std::string& columnName) const;
     void addRow(const std::vector<std::optional<ColumnType>>& row);
+    void addRow(const std::map<std::string, std::optional<ColumnType>>& row);
     void removeRow(size_t index);
     Column<ColumnType> removeColumn(const std::string& columnName);
     Column<ColumnType> removeColumn(size_t index);
     DataFrame selectColumns(const std::vector<std::string>& columnNames);
     DataFrame selectColumns(const std::vector<size_t>& indexes);
-    DataFrame filterRows(const std::function<bool(const std::vector<std::optional<ColumnType>>&)>& pred) const;
+    template<typename Predicate> DataFrame filterRows(const Predicate& pred) const;
+    //DataFrame filterRows(const std::function<bool(const std::vector<std::optional<ColumnType>>&)>& pred) const;
 
     // STATISTICS
     std::map<std::string, std::map<std::string, ColumnType>> describe() const;
