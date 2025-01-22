@@ -15,6 +15,10 @@ private:
     std::map<std::string, Column<ColumnType>> columns;
     std::map<std::string, size_t> columnIndex;
 
+    std::vector<double> aggregateSum(const std::vector<std::vector<std::optional<ColumnType>>>& groupRows) const;
+    std::vector<double> aggregateCount(const std::vector<std::vector<std::optional<ColumnType>>>& groupRows) const;
+    std::vector<double> aggregateMean(const std::vector<std::vector<std::optional<ColumnType>>>& groupRows) const;
+
 public:
     DataFrame() {}
 
@@ -75,7 +79,6 @@ public:
     void filterColumn(const std::string& columnName, std::function<bool(const ColumnType&)> predicate);
 
     DataFrame groupBy(const std::string& columnName, const std::string& aggregation);
-    std::vector<double> aggregateSum(const std::vector<std::vector<std::optional<ColumnType>>>& groupRows) const;
 };
 
 #endif //ABSTRACTPROGRAMMINGPROJECT_DATAFRAME_H

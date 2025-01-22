@@ -652,6 +652,18 @@ DataFrame DataFrame::groupBy(const std::string &columnName, const std::string &a
                     aggregatedRow.push_back(std::make_optional<ColumnType>(sum));
                 }
             }
+            if(aggregation == "count") {
+                std::vector<double> counts = aggregateCount(group.second);
+                for (auto count : counts) {
+                    aggregatedRow.push_back(std::make_optional<ColumnType>(count));
+                }
+            }
+            if(aggregation == "mean") {
+                std::vector<double> means = aggregateMean(group.second);
+                for (auto mean : means) {
+                    aggregatedRow.push_back(std::make_optional<ColumnType>(mean));
+                }
+            }
         result.addRow(aggregatedRow);
     }
 
@@ -675,6 +687,55 @@ std::vector<double> DataFrame::aggregateSum(const std::vector<std::vector<std::o
         }
     }
     return sum;
+}
+
+std::vector<double> DataFrame::aggregateCount(const std::vector<std::vector<std::optional<ColumnType>>>& groupRows) const {
+    std::vector<double> counts(groupRows.size(), 0.0);
+
+    for (size_t rowIndex = 0; rowIndex < groupRows.size(); ++rowIndex) {
+        const auto& row = groupRows[rowIndex];
+        for (const auto& cell : row) {
+            if (cell.has_value()) {
+                counts[rowIndex] += 1.0;
+            }
+        }
+    }
+    return counts;
+}
+
+std::vector<double> DataFrame::aggregateMean(const std::vector<std::vector<std::optional<ColumnType>>>& groupRows) const {
+    if (groupRows.empty() || groupRows[0].empty()) {
+        return {};
+    }
+
+    size_t numColumns = groupRows[0].size();
+    std::vector<double> means(numColumns, 0.0);
+    std::vector<size_t> counts(numColumns, 0);
+
+    for (const auto& row : groupRows) {
+        for (size_t colIndex = 0; colIndex < numColumns; ++colIndex) {
+            const auto& cell = row[colIndex];
+            if (cell.has_value()) {
+                means[colIndex] += std::visit([](const auto& value) -> double {
+                    if constexpr (std::is_arithmetic_v<std::decay_t<decltype(value)>>) {
+                        return static_cast<double>(value);
+                    }
+                    return 0.0;
+                }, cell.value());
+                ++counts[colIndex];
+            }
+        }
+    }
+
+    for (size_t colIndex = 0; colIndex < numColumns; ++colIndex) {
+        if (counts[colIndex] > 0) {
+            means[colIndex] /= static_cast<double>(counts[colIndex]);
+        } else {
+            means[colIndex] = 0.0;
+        }
+    }
+
+    return means;
 }
 
 int main() {
@@ -727,4 +788,6 @@ int main() {
     df.saveCSV("../test2.csv", ";", true);
 
     df.groupBy("col1", "sum").print();
+    df.groupBy("col1", "count").print();
+    df.groupBy("col1", "mean").print();
 }
